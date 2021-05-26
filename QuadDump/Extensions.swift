@@ -1,5 +1,16 @@
 import UIKit
 
+struct SimpleError: Error {
+    let description: String
+}
+typealias SimpleResult = Result<(), SimpleError>
+func Ok() -> SimpleResult {
+    return .success(())
+}
+func Err(_ description: String) -> SimpleResult {
+    return .failure(SimpleError(description: description))
+}
+
 extension URL {
     // DocumentsディレクトリへのURLを返す
     static var docs: URL? {

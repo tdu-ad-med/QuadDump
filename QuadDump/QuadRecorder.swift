@@ -1,11 +1,33 @@
 import UIKit
 
-class QuadRecorder {
+class QuadRecorder: Recorder {
     // setterのみをプライベートにする
-    public private(set) var status: Status = .idol
+    public private(set) var status: Status = .disable
 
-    func start() -> Result<(), RecordError> {
-        // 録画中であれば何もしない
+    var imuRecorder = IMURecorder()
+
+    deinit {
+        let _ = disable()
+    }
+
+    // センサーへのアクセスを開始
+    func enable() -> SimpleResult {
+        if case let .failure(e) = imuRecorder.enable() { return Err(e.description) }
+        status = .idol
+        return Ok()
+    }
+
+    // センサーへのアクセスを終了
+    func disable() -> SimpleResult {
+        let _ = stop()
+        if case let .failure(e) = imuRecorder.disable() { return Err(e.description) }
+        status = .disable
+        return Ok()
+    }
+
+    // 録画開始
+    func start() -> SimpleResult {
+        if case .disable   = status { return Err("センサーへアクセスしていません") }
         if case .recording = status { return Err("録画は既に開始しています") }
 
         // 保存先のフォルダを作成
@@ -17,29 +39,32 @@ class QuadRecorder {
             return Err("保存先フォルダの作成に失敗しました")
         }
 
+        // 各センサーの録画開始
+        if case let .failure(e) = imuRecorder.start() { return Err(e.description) }
+
         // 録画に関する情報を設定
         let info = Info(
             startTime: date,
             outputDir: outputDir
         )
 
-        // statusをrecordingに更新
         status = .recording(info)
 
         return Ok()
     }
 
-    func stop() -> Result<(), RecordError> {
-        // 録画中でなければ何もしない
-        guard case .recording = status else { return Err("録画は既に終了しています") }
+    // 録画終了
+    func stop() -> SimpleResult {
+        if case .disable = status { return Err("センサーへアクセスしていません") }
+        if case .idol    = status { return Err("録画は既に終了しています") }
 
-        // statusをidolに更新
+        // 各センサーの録画終了
+        if case let .failure(e) = imuRecorder.stop() { return Err(e.description) }
+
         status = .idol
 
         return Ok()
     }
-
-    deinit { let _ = stop() }
 
     // 録画に関する情報
     struct Info {
@@ -49,20 +74,8 @@ class QuadRecorder {
 
     // 録画状態
     enum Status {
+        case disable          // センサーにアクセスしていない状態
         case idol             // 録画していない状態
         case recording(Info)  // 録画中
-    }
-
-    // エラー
-    struct RecordError: Error {
-        let description: String
-    }
-
-    private func Ok() -> Result<(), RecordError> {
-        return .success(())
-    }
-
-    private func Err(_ description: String) -> Result<(), RecordError> {
-        return .failure(RecordError(description: description))
     }
 }

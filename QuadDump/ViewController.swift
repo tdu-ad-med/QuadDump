@@ -51,11 +51,14 @@ class ViewController: UIViewController {
 
         // QuadRecorderのインスタンスを作成
         quadRecorder = QuadRecorder()
+
+        // センサーへのアクセスを開始
+        quadRecorder.enable()
     }
 
     @objc func recordSwitcher(_ button: UIButton) {
         // 録画の状態を切り替え
-        var result: Result<(), QuadRecorder.RecordError> = .success(())
+        var result: SimpleResult = Ok()
         if case .recording = quadRecorder.status {
             result = quadRecorder.stop()
         }
