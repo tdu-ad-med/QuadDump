@@ -1,11 +1,18 @@
+**このアプリは開発中です。**
+
+**以下は完成後に公開する予定の文章です。**
+
 # QuadDump
-このアプリはiPhone 12 Pro上で動作する録画アプリです。
+
+これはiPhone 12 Pro上で動作する録画アプリです。
 このアプリでは以下の4つのセンサーから得られる情報を同時に録画します。
 
 - カメラからの映像
 - LiDARからのデプス映像
 - IMU (加速度、角加速度の値)
 - GPS
+
+また、録画したデータは「ファイル」アプリから閲覧できます。
 
 # ビルドに必要なツール
 
@@ -16,13 +23,13 @@
 # git cloneからデバッグ実行までの流れ
 
 ```sh
-git clone https://github.com/wakewakame/iOSplayground
-cd iOSplayground
+git clone https://github.com/wakewakame/QuadDump
+cd QuadDump
 xcodegen
 ./debug.sh
 ```
 
-`xcodegen`でXcodeのプロジェクトファイル`iOSplayground.xcodeproj`を生成します。
+`xcodegen`でXcodeのプロジェクトファイル`QuadDump.xcodeproj`を生成します。
 
 `./debug.sh`で実機でのデバッグ実行を行います。
 どのデバイスで実行するかを問われるので、表示されるデバイスに対応する数字を入力します。

@@ -1,10 +1,3 @@
-//
-//  AppDelegate.swift
-//  iOSplayground
-//
-//  Created by 吉井大輝 on 2021/04/21.
-//
-
 import UIKit
 
 @main

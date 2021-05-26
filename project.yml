@@ -6,7 +6,7 @@ settings:
   CODE_SIGN_STYLE: Automatic
 
 targets:
-  iOSplayground:
+  QuadDump:
     sources: QuadDump
     platform: iOS
     type: application
