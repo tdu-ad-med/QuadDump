@@ -11,11 +11,11 @@ class ViewController: UIViewController {
         let height: CGFloat = self.view.frame.height;
 
         // 背景色の指定
-        view.backgroundColor = UIColor(hex: 0x292929)
+        self.view.backgroundColor = UIColor(hex: 0x292929)
 
         // プレビューの作成
         let previewImageView = UIImageView()
-        previewImageView.bounds = CGRect(x: 0, y: 0, width: width, height: width * 16 / 9)
+        previewImageView.bounds = CGRect(x: 0, y: 0, width: width, height: width * 16 / 12)
         previewImageView.center = self.view.center
         previewImageView.backgroundColor = UIColor(hex: 0x000000)
         self.view.addSubview(previewImageView)
@@ -30,7 +30,8 @@ class ViewController: UIViewController {
         statusTextView.center = self.view.center
         statusTextView.isEditable = false
         statusTextView.isSelectable = false
-        statusTextView.font = UIFont.systemFont(ofSize: 16)
+        statusTextView.backgroundColor = UIColor(hex: 0x000000, alpha: 0.0)
+        statusTextView.font = UIFont(name: "DIN Condensed", size: 16) ?? UIFont.systemFont(ofSize: 16)
         statusTextView.text = "status"
         statusTextView.textColor = UIColor(hex: 0xF5F5F5)
         self.view.addSubview(statusTextView)
@@ -54,6 +55,7 @@ class ViewController: UIViewController {
 
         // センサーへのアクセスを開始
         quadRecorder.enable()
+        quadRecorder.arRecorder.preview = previewImageView
     }
 
     @objc func recordSwitcher(_ button: UIButton) {
