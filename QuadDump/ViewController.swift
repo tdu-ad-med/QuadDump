@@ -55,16 +55,17 @@ class ViewController: UIViewController {
 
     @objc func recordSwitcher(_ button: UIButton) {
         // 録画の状態を切り替え
+        var result: Result<(), QuadRecorder.RecordError> = .success(())
         if case .recording = quadRecorder.status {
-            quadRecorder.stop()
+            result = quadRecorder.stop()
         }
         else {
-            quadRecorder.start()
+            result = quadRecorder.start()
         }
 
         // 処理が失敗した場合はアラートを表示
-        if case let .error(description) = self.quadRecorder.status {
-            let alert = UIAlertController(title: "Error", message: description, preferredStyle: .alert)
+        if case let .failure(e) = result {
+            let alert = UIAlertController(title: "Error", message: e.description, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default){_ in })
             present(alert, animated: true, completion: nil)
         }
@@ -80,16 +81,5 @@ class ViewController: UIViewController {
             button.setTitleColor(UIColor(hex: 0x292929), for: .normal)
             button.setTitle("Record", for: .normal)
         }
-    }
-}
-
-extension UIColor {
-    convenience init(hex: UInt32, alpha: CGFloat = 1.0) {
-        self.init(
-            red  : CGFloat((hex >> 16) & 0xFF) / 255.0,
-            green: CGFloat((hex >> 8 ) & 0xFF) / 255.0,
-            blue : CGFloat((hex >> 0 ) & 0xFF) / 255.0,
-            alpha: alpha
-        )
     }
 }
