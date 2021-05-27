@@ -1,4 +1,3 @@
-import UIKit
 import ARKit
 
 class ARRecorder: NSObject, ARSessionDelegate, Recorder {

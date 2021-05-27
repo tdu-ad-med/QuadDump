@@ -1,4 +1,4 @@
-import UIKit
+import SwiftUI
 
 struct SimpleError: Error {
     let description: String
@@ -81,13 +81,14 @@ extension URL {
     }
 }
 
-extension UIColor {
-    convenience init(hex: UInt32, alpha: CGFloat = 1.0) {
+extension Color {
+    init(hex: UInt32, alpha: Double = 1.0) {
         self.init(
-            red  : CGFloat((hex >> 16) & 0xFF) / 255.0,
-            green: CGFloat((hex >> 8 ) & 0xFF) / 255.0,
-            blue : CGFloat((hex >> 0 ) & 0xFF) / 255.0,
-            alpha: alpha
+            .sRGB,
+            red    : Double((hex >> 16) & 0xFF) / 255.0,
+            green  : Double((hex >> 8 ) & 0xFF) / 255.0,
+            blue   : Double((hex >> 0 ) & 0xFF) / 255.0,
+            opacity: alpha
         )
     }
 }

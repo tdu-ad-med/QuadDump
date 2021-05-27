@@ -1,4 +1,3 @@
-import UIKit
 import CoreMotion
 
 class IMURecorder: Recorder {
