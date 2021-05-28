@@ -1,9 +1,10 @@
 import ARKit
+import SwiftUI
 
 class ARRecorder: NSObject, ARSessionDelegate, Recorder {
     private var session = ARSession()
     private var isEnable: Bool = false
-    var preview: UIImageView? = nil
+    var callback: ((_: Image) -> ())? = nil
 
     public override init() {
         super.init()
@@ -47,10 +48,12 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         let depthPixelBuffer = sceneDepth.depthMap
         let confidencePixelBuffer = sceneDepth.confidenceMap!
 
-        guard let preview = self.preview else { return }
+        guard let callback = self.callback else { return }
         let context = CIContext(options: nil)
         let colorImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
         guard let cameraColorImage = context.createCGImage(colorImage, from: colorImage.extent) else { return }
-        preview.image = UIImage(cgImage: cameraColorImage)
+        let uiImage = UIImage(cgImage: cameraColorImage)
+        let preview = Image(uiImage: uiImage)
+        callback(preview)
     }
 }
