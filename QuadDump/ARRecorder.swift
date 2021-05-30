@@ -18,8 +18,7 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
     func enable() -> SimpleResult {
         if isEnable { return Err("IMUは既に開始しています") }
         let configuration = ARWorldTrackingConfiguration()
-        configuration.frameSemantics = .sceneDepth
-        //configuration.frameSemantics = .smoothedSceneDepth
+        //configuration.frameSemantics = .sceneDepth
         self.session.run(configuration)
         isEnable = true
         return Ok()
@@ -44,13 +43,13 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         let colorPixelBuffer = frame.capturedImage
 
-        guard let sceneDepth = frame.smoothedSceneDepth ?? frame.sceneDepth else { return }
-        let depthPixelBuffer = sceneDepth.depthMap
-        let confidencePixelBuffer = sceneDepth.confidenceMap!
+        let sceneDepth = frame.sceneDepth
+        let depthPixelBuffer = sceneDepth?.depthMap
+        let confidencePixelBuffer = sceneDepth?.confidenceMap
 
         guard let callback = self.callback else { return }
         let context = CIContext(options: nil)
-        let colorImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
+        let colorImage = CIImage(cvPixelBuffer: depthPixelBuffer ?? colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
         guard let cameraColorImage = context.createCGImage(colorImage, from: colorImage.extent) else { return }
         let uiImage = UIImage(cgImage: cameraColorImage)
         let preview = Image(uiImage: uiImage)

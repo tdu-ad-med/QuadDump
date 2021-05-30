@@ -68,7 +68,7 @@ struct RecordButton: View {
     // バネマスダンパー系で臨界減衰となるようなアニメーションの作成
     //   臨界減衰となる条件: damping = sqrt(stiffness) * 2
     private var buttonAnimation: Animation {
-        Animation.interpolatingSpring(mass: 1.0, stiffness: 260, damping: sqrt(260) * 2)
+        Animation.interpolatingSpring(mass: 1.0, stiffness: 300, damping: sqrt(300) * 2)
     }
 
     // 録画開始/停止の切り替え

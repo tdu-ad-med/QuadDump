@@ -5,13 +5,15 @@
 	<!--Info.plistの設定が反映されない場合はiOSを再起動することで解決できる場合がある-->
 
 	<!--カメラへのアクセス権限を得る-->
-	<!--
 	<key>NSCameraUsageDescription</key><string></string>
-	-->
 
 	<!--ファイルアプリから/Documentsの内容を表示できるようにする-->
 	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>UIFileSharingEnabled</key><true/>
+
+	<!--ダークテーマを使用する-->
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 
 	<!--以降はXcodeが生成したデフォルトの設定-->
 	<key>CFBundleDevelopmentRegion</key>

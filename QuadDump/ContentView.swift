@@ -6,15 +6,39 @@ struct ContentView: View {
     @State private var errorAlert = false
     @State private var result: SimpleResult = Ok()
     @State private var preview: Image? = nil
+    private let font = Font.custom("DIN Condensed", size: 32)
 
     var body: some View {
         ZStack {
             if let preview = preview {
-                preview
-                    .resizable()
-                    .scaledToFit()
-                    .padding(.top, 74)
-                    .padding(.bottom, 200)
+                    ZStack {
+                        GeometryReader(content: { geometry in
+                            preview
+                                .resizable()
+                                .scaledToFill()
+                                .edgesIgnoringSafeArea(.all)
+                                .blur(radius: 30)
+                                .opacity(0.4)
+                                .background(Color(hex: 0x000000))
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                        })
+                        VStack {
+                            Spacer()
+                            preview
+                                .resizable()
+                                .scaledToFit()
+                            Spacer()
+                            Spacer()
+                        }
+                    }
+            }
+            VStack {
+                Text("00:00:00")
+                    .font(font)
+                    .foregroundColor(Color(hex: 0xfeffff))
+                    .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)
+                    .padding(.top, 16)
+                Spacer()
             }
             VStack {
                 Spacer()
@@ -35,15 +59,13 @@ struct ContentView: View {
                         }
                     }
                 )
-                .padding(.bottom, 64)
+                .padding(.bottom, 16)
                 .alert(isPresented: $errorAlert) {
                     var description: String? = nil
                     if case let .failure(e) = result { description = e.description }
                     return Alert(title: Text("Error"), message: Text(description ?? ""), dismissButton: .default(Text("OK")))
                 }
             }
-            Text("Hello, world!")
-                .padding(.bottom, 100)
         }
         .onAppear {
             print("appear")
