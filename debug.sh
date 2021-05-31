@@ -125,7 +125,7 @@ xcodebuild -project "${PROJECT:-QuadDump.xcodeproj}" -destination "${DESTINATION
     if which ios-deploy ; then
 	# 実機でのデバッグ実行
 	DESTINATION_ID=$(echo "$DESTINATION" | sed "s/^platform=iOS,id=//")
-	ios-deploy --bundle ./build/${CONFIGURATION:-Debug}-iphoneos/QuadDump.app --debug --id $DESTINATION_ID
+	ios-deploy --bundle ./build/${CONFIGURATION:-Debug}-iphoneos/QuadDump.app --debug --id $DESTINATION_ID --no-wifi
     else
 	echo "ios-deployがインストールされていないので、実機でのデバッグ実行は行いません"
     fi

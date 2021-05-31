@@ -4,23 +4,27 @@ import SwiftUI
 class ARRecorder: NSObject, ARSessionDelegate, Recorder {
     private var session = ARSession()
     private var isEnable: Bool = false
-    var callback: ((_: Image) -> ())? = nil
+    var callback: ((ARPreview) -> ())? = nil
 
     public override init() {
         super.init()
         self.session.delegate = self
     }
 
-    deinit {
-        let _ = disable()
-    }
+    deinit { let _ = disable() }
 
     func enable() -> SimpleResult {
         if isEnable { return Err("IMUは既に開始しています") }
         let configuration = ARWorldTrackingConfiguration()
-        //configuration.frameSemantics = .sceneDepth
+
+        // LiDARセンサーを搭載している場合はデプスを取得する
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            configuration.frameSemantics = .sceneDepth
+        }
+
         self.session.run(configuration)
         isEnable = true
+
         return Ok()
     }
 
@@ -48,11 +52,36 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         let confidencePixelBuffer = sceneDepth?.confidenceMap
 
         guard let callback = self.callback else { return }
+
         let context = CIContext(options: nil)
-        let colorImage = CIImage(cvPixelBuffer: depthPixelBuffer ?? colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
-        guard let cameraColorImage = context.createCGImage(colorImage, from: colorImage.extent) else { return }
-        let uiImage = UIImage(cgImage: cameraColorImage)
-        let preview = Image(uiImage: uiImage)
-        callback(preview)
+        let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
+        guard let colorCGImage = context.createCGImage(colorCIImage, from: colorCIImage.extent) else { return }
+        let colorUIImage = UIImage(cgImage: colorCGImage)
+        let colorImage = Image(uiImage: colorUIImage)
+        let colorSize = CGSize(width: CVPixelBufferGetWidth(colorPixelBuffer), height: CVPixelBufferGetHeight(colorPixelBuffer))
+
+        var depthImage: Image? = nil
+        var depthSize: CGSize = .zero
+        if let depthPixelBuffer = depthPixelBuffer {
+            let depthCIImage = CIImage(cvPixelBuffer: depthPixelBuffer).oriented(CGImagePropertyOrientation.right)
+            guard let depthCGImage = context.createCGImage(depthCIImage, from: depthCIImage.extent) else { return }
+            let depthUIImage = UIImage(cgImage: depthCGImage)
+            depthImage = Image(uiImage: depthUIImage)
+            depthSize = CGSize(width: CVPixelBufferGetWidth(depthPixelBuffer), height: CVPixelBufferGetHeight(depthPixelBuffer))
+        }
+
+        callback(ARPreview(
+            colorImage: colorImage,
+            colorSize: colorSize,
+            depthImage: depthImage,
+            depthSize: depthSize
+       ))
+    }
+
+    struct ARPreview {
+        let colorImage: Image
+        let colorSize: CGSize
+        let depthImage: Image?
+        let depthSize: CGSize
     }
 }
