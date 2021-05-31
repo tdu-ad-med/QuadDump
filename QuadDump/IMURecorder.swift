@@ -4,6 +4,8 @@ class IMURecorder: Recorder {
     private var motionManager = CMMotionManager()
     private var isEnable: Bool = false
     private var isRecording: Bool = false
+    private var lastUpdate: TimeInterval = 0.0
+    var callback: ((IMUPreview) -> ())? = nil
 
     deinit {
         let _ = disable()
@@ -41,8 +43,17 @@ class IMURecorder: Recorder {
     }
 
     func motionHandler(motion: CMDeviceMotion?, error: Error?) {
-        if (!isRecording) { return }
         guard let motion = motion, error == nil else { return }
+
+        let fps = 1.0 / (motion.timestamp - lastUpdate)
+        lastUpdate = motion.timestamp
+        self.callback?(IMUPreview(
+            acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
+            attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
+            fps: fps
+        ))
+
+        if (!isRecording) { return }
         var csv = ""
         csv += String(motion.timestamp) + ","
         csv += String(motion.userAcceleration.x) + ","
@@ -51,6 +62,11 @@ class IMURecorder: Recorder {
         csv += String(motion.attitude.roll) + ","
         csv += String(motion.attitude.pitch) + ","
         csv += String(motion.attitude.yaw) + "\n"
-        print(csv)
+    }
+
+    struct IMUPreview {
+        let acceleration: (Double, Double, Double)
+        let attitude: (Double, Double, Double)
+        let fps: Double
     }
 }

@@ -5,16 +5,17 @@ struct ContentView: View {
     @State private var isRecording: Bool = false
     @State private var errorAlert = false
     @State private var result: SimpleResult = Ok()
-    @State private var preview: ARRecorder.ARPreview? = nil
+    @State private var arPreview: ARRecorder.ARPreview? = nil
+    @State private var imuPreview: IMURecorder.IMUPreview? = nil
     private let timerFont = Font.custom("DIN Condensed", size: 48)
     private let normalFont = Font.custom("DIN Condensed", size: 24)
     private let smallFont = Font.custom("DIN Condensed", size: 16)
 
     var body: some View {
         ZStack(alignment: .center) {
-            if let preview = preview { GeometryReader(content: { geometry in ZStack {
+            if let arPreview = arPreview { GeometryReader(content: { geometry in ZStack {
                 // カメラをぼかした背景の表示
-                preview.colorImage
+                arPreview.colorImage
                     .resizable()
                     .scaledToFill()
                     .blur(radius: 10)
@@ -26,13 +27,13 @@ struct ContentView: View {
                 // カラーとデプスのプレビュー
                 VStack() {
                     let width = geometry.size.width
-                    let previewHeight = width * preview.colorSize.width / preview.colorSize.height
+                    let previewHeight = width * arPreview.colorSize.width / arPreview.colorSize.height
                     let top = max(geometry.size.height - previewHeight, 0) / 3
                     TabView {
-                        preview.colorImage
+                        arPreview.colorImage
                             .resizable()
                             .scaledToFit()
-                        if let depthImage = preview.depthImage {
+                        if let depthImage = arPreview.depthImage {
                             depthImage
                                 .resizable()
                                 .scaledToFit()
@@ -61,13 +62,13 @@ struct ContentView: View {
                         VStack {
                             Text("Camera")
                                 .font(smallFont)
-                            Text("32.8 Hz")
+                            Text(String(format: "%.1f Hz", arPreview.fps))
                                 .font(normalFont)
                         }.frame(width: 70, height: 40)
                         VStack {
                             Text("IMU")
                                 .font(smallFont)
-                            Text("122.5 Hz")
+                            Text(String(format: "%.1f Hz", imuPreview?.fps ?? 0))
                                 .font(normalFont)
                         }.frame(width: 70, height: 40)
                         VStack {
@@ -134,8 +135,11 @@ struct ContentView: View {
         .onAppear {
             print("appear")
             let _ = quadRecorder.enable()
-            quadRecorder.arRecorder.callback = { preview in
-                self.preview = preview
+            quadRecorder.arRecorder.callback = { arPreview in
+                self.arPreview = arPreview
+            }
+            quadRecorder.imuRecorder.callback = { imuPreview in
+                self.imuPreview = imuPreview
             }
         }
         .onDisappear {

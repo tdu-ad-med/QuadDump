@@ -4,6 +4,7 @@ import SwiftUI
 class ARRecorder: NSObject, ARSessionDelegate, Recorder {
     private var session = ARSession()
     private var isEnable: Bool = false
+    private var lastUpdate: TimeInterval = 0.0
     var callback: ((ARPreview) -> ())? = nil
 
     public override init() {
@@ -21,6 +22,8 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
             configuration.frameSemantics = .sceneDepth
         }
+
+        self.session.delegateQueue = DispatchQueue.global(qos: .userInteractive)
 
         self.session.run(configuration)
         isEnable = true
@@ -51,6 +54,9 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         let depthPixelBuffer = sceneDepth?.depthMap
         let confidencePixelBuffer = sceneDepth?.confidenceMap
 
+        let fps = 1.0 / (frame.timestamp - lastUpdate)
+        lastUpdate = frame.timestamp
+
         guard let callback = self.callback else { return }
 
         let context = CIContext(options: nil)
@@ -74,8 +80,9 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
             colorImage: colorImage,
             colorSize: colorSize,
             depthImage: depthImage,
-            depthSize: depthSize
-       ))
+            depthSize: depthSize,
+            fps: fps
+        ))
     }
 
     struct ARPreview {
@@ -83,5 +90,6 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         let colorSize: CGSize
         let depthImage: Image?
         let depthSize: CGSize
+        let fps: Double
     }
 }
