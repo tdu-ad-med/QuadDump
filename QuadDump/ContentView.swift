@@ -135,12 +135,14 @@ struct ContentView: View {
         .onAppear {
             print("appear")
             let _ = quadRecorder.enable()
-            quadRecorder.arRecorder.callback = { arPreview in
-                self.arPreview = arPreview
-            }
-            quadRecorder.imuRecorder.callback = { imuPreview in
-                self.imuPreview = imuPreview
-            }
+            quadRecorder.preview(
+                arPreview: { arPreview in
+                    self.arPreview = arPreview
+                },
+                imuPreview: { imuPreview in
+                    self.imuPreview = imuPreview
+                }
+            )
         }
         .onDisappear {
             print("disappear")
@@ -152,5 +154,6 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .previewDevice("iPad (8th generation)")
     }
 }

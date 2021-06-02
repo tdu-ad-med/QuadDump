@@ -5,10 +5,18 @@ class QuadRecorder: Recorder {
     public private(set) var status: Status = .disable
 
     var imuRecorder = IMURecorder()
-    var arRecorder = ARRecorder()
+    private let arRecorder = ARRecorder()
 
     deinit {
         let _ = disable()
+    }
+
+    func preview(
+        arPreview: ((ARRecorder.ARPreview) -> ())?,
+        imuPreview: ((IMURecorder.IMUPreview) -> ())?
+    ) {
+        self.arRecorder.preview(arPreview)
+        self.imuRecorder.preview(imuPreview)
     }
 
     // センサーへのアクセスを開始
