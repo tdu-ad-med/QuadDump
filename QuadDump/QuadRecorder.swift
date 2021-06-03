@@ -46,25 +46,29 @@ class QuadRecorder: Recorder {
         if case .disable   = status { return Err("センサーへアクセスしていません") }
         if case .recording = status { return Err("録画は既に開始しています") }
 
+        // 録画開始時刻の記録
+        let startDate = Date()
+        let startTime = ProcessInfo.processInfo.systemUptime
+
         // 保存先のフォルダを作成
-        let date = Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let outputDirName = formatter.string(from: date)
+        let outputDirName = formatter.string(from: startDate)
         guard let outputDir = URL.docs?.createDir(name: outputDirName) else {
             return Err("保存先フォルダの作成に失敗しました")
         }
+
+        // 録画に関する情報を設定
+        let info = Info(
+            startDate: startDate,
+            startTime: startTime,
+            outputDir: outputDir
+        )
 
         // 各センサーの録画開始
         if case let .failure(e) = arRecorder.start() { return Err(e.description) }
         if case let .failure(e) = imuRecorder.start() { return Err(e.description) }
         if case let .failure(e) = gpsRecorder.start() { return Err(e.description) }
-
-        // 録画に関する情報を設定
-        let info = Info(
-            startTime: date,
-            outputDir: outputDir
-        )
 
         status = .recording(info)
 
@@ -88,8 +92,9 @@ class QuadRecorder: Recorder {
 
     // 録画に関する情報
     struct Info {
-        let startTime: Date  // 録画開始時刻
-        let outputDir: URL   // 保存先ディレクトリ
+        let startDate: Date          // 録画開始時刻(日時)
+        let startTime: TimeInterval  // 録画開始時刻(デバイスを起動してからのTimeInterval)
+        let outputDir: URL           // 保存先ディレクトリ
     }
 
     // 録画状態

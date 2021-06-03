@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var arPreview: ARRecorder.ARPreview? = nil
     @State private var imuPreview: IMURecorder.IMUPreview? = nil
     @State private var gpsPreview: GPSRecorder.GPSPreview? = nil
+    @State private var timer: String = "00:00:00"
     private let timerFont = Font.custom("DIN Condensed", size: 48)
     private let normalFont = Font.custom("DIN Condensed", size: 24)
     private let smallFont = Font.custom("DIN Condensed", size: 16)
@@ -48,7 +49,7 @@ struct ContentView: View {
 
                 // 撮影時間の表示
                 VStack {
-                    Text("1:07:33")
+                    Text(self.timer)
                         .font(timerFont)
                         .foregroundColor(Color(hex: 0xfeffff))
                         .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)
@@ -78,12 +79,6 @@ struct ContentView: View {
                             Text(String(format: "%.1f Hz", gpsPreview?.fps ?? 0))
                                 .font(normalFont)
                         }.frame(width: 70, height: 40)
-                        VStack {
-                            Text("Data Size")
-                                .font(smallFont)
-                            Text("12.2 GB")
-                                .font(normalFont)
-                        }.frame(width: 70, height: 40)
                     }
                     .padding(.bottom, 126)
                 }
@@ -108,6 +103,7 @@ struct ContentView: View {
                             if case let .failure(_) = result {
                                 errorAlert = true
                             }
+                            self.timer = TimeInterval(0).hhmmss
                         }
                     )
                     .padding(.bottom, 16)
@@ -146,6 +142,9 @@ struct ContentView: View {
             quadRecorder.preview(
                 arPreview: { arPreview in
                     self.arPreview = arPreview
+                    if case let .recording(info) = self.quadRecorder.status {
+                        self.timer = (arPreview.timestamp - info.startTime).hhmmss
+                    }
                 },
                 imuPreview: { imuPreview in
                     self.imuPreview = imuPreview

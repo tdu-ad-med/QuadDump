@@ -7,6 +7,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate, Recorder {
     private var lastUpdate: TimeInterval = 0.0
     private var previewLastUpdate: TimeInterval = 0.0
     private var previewCallback: ((GPSPreview) -> ())? = nil
+    private let systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)  // システムが起動した日時
 
     deinit {
         let _ = disable()
@@ -50,7 +51,9 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate, Recorder {
     // GPS座標が更新されたときに呼ばれるDelegate
     func locationManager(_ locationManager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for (index, location) in locations.enumerated() {
-            let timestamp = location.timestamp.timeIntervalSince1970
+            // システムが起動してからの時刻に変換
+            let timestamp = systemUptime.distance(to: location.timestamp)
+
             let fps = 1.0 / (timestamp - lastUpdate)
             lastUpdate = timestamp
             

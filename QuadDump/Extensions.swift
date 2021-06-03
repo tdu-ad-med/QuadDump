@@ -98,3 +98,16 @@ extension CGPoint {
     static func - (left: CGPoint, right: CGPoint) -> CGPoint { return CGPoint(x: left.x - right.x, y: left.y - right.y) }
     var length: CGFloat { sqrt(self.x * self.x + self.y * self.y) }
 }
+
+extension TimeInterval {
+    var hhmmss: String {
+        let ss_ = abs(self)
+        let mm_ = ss_ / 60
+        let hh_ = mm_ / 60
+        let ss = Int(ss_ - 60 * floor(ss_ / 60))
+        let mm = Int(mm_ - 60 * floor(mm_ / 60))
+        let hh = Int(hh_)
+        let sign = (self < 0) ? "-" : ""
+        return sign + String(format: "%02d:%02d:%02d", hh, mm, ss)
+    }
+}
