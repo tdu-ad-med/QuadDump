@@ -4,25 +4,29 @@ class QuadRecorder: Recorder {
     // setterのみをプライベートにする
     public private(set) var status: Status = .disable
 
-    var imuRecorder = IMURecorder()
     private let arRecorder = ARRecorder()
+    private let imuRecorder = IMURecorder()
+    private let gpsRecorder = GPSRecorder()
 
     deinit {
         let _ = disable()
     }
 
     func preview(
-        arPreview: ((ARRecorder.ARPreview) -> ())?,
-        imuPreview: ((IMURecorder.IMUPreview) -> ())?
+        arPreview: ((ARRecorder.ARPreview) -> ())? = nil,
+        imuPreview: ((IMURecorder.IMUPreview) -> ())? = nil,
+        gpsPreview: ((GPSRecorder.GPSPreview) -> ())? = nil
     ) {
         self.arRecorder.preview(arPreview)
         self.imuRecorder.preview(imuPreview)
+        self.gpsRecorder.preview(gpsPreview)
     }
 
     // センサーへのアクセスを開始
     func enable() -> SimpleResult {
-        if case let .failure(e) = imuRecorder.enable() { return Err(e.description) }
         if case let .failure(e) = arRecorder.enable() { return Err(e.description) }
+        if case let .failure(e) = imuRecorder.enable() { return Err(e.description) }
+        if case let .failure(e) = gpsRecorder.enable() { return Err(e.description) }
         status = .idol
         return Ok()
     }
@@ -30,8 +34,9 @@ class QuadRecorder: Recorder {
     // センサーへのアクセスを終了
     func disable() -> SimpleResult {
         let _ = stop()
-        if case let .failure(e) = imuRecorder.disable() { return Err(e.description) }
         if case let .failure(e) = arRecorder.disable() { return Err(e.description) }
+        if case let .failure(e) = imuRecorder.disable() { return Err(e.description) }
+        if case let .failure(e) = gpsRecorder.disable() { return Err(e.description) }
         status = .disable
         return Ok()
     }
@@ -51,8 +56,9 @@ class QuadRecorder: Recorder {
         }
 
         // 各センサーの録画開始
-        if case let .failure(e) = imuRecorder.start() { return Err(e.description) }
         if case let .failure(e) = arRecorder.start() { return Err(e.description) }
+        if case let .failure(e) = imuRecorder.start() { return Err(e.description) }
+        if case let .failure(e) = gpsRecorder.start() { return Err(e.description) }
 
         // 録画に関する情報を設定
         let info = Info(
@@ -71,8 +77,9 @@ class QuadRecorder: Recorder {
         if case .idol    = status { return Err("録画は既に終了しています") }
 
         // 各センサーの録画終了
-        if case let .failure(e) = imuRecorder.stop() { return Err(e.description) }
         if case let .failure(e) = arRecorder.stop() { return Err(e.description) }
+        if case let .failure(e) = imuRecorder.stop() { return Err(e.description) }
+        if case let .failure(e) = gpsRecorder.stop() { return Err(e.description) }
 
         status = .idol
 

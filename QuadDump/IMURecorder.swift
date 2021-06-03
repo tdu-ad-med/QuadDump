@@ -53,6 +53,13 @@ class IMURecorder: Recorder {
         let fps = 1.0 / (motion.timestamp - lastUpdate)
         lastUpdate = motion.timestamp
 
+        let preview = IMUPreview(
+            acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
+            attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
+            timestamp: motion.timestamp,
+            fps: fps
+        )
+
         if isRecording {
             var csv = ""
             csv += String(motion.timestamp) + ","
@@ -66,12 +73,7 @@ class IMURecorder: Recorder {
 
         if (motion.timestamp - previewLastUpdate) > (1 / 10) {
             previewLastUpdate = motion.timestamp
-            self.previewCallback?(IMUPreview(
-                acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
-                attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
-                timestamp: motion.timestamp,
-                fps: fps
-            ))
+            self.previewCallback?(preview)
         }
     }
 

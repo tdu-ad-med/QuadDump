@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var result: SimpleResult = Ok()
     @State private var arPreview: ARRecorder.ARPreview? = nil
     @State private var imuPreview: IMURecorder.IMUPreview? = nil
+    @State private var gpsPreview: GPSRecorder.GPSPreview? = nil
     private let timerFont = Font.custom("DIN Condensed", size: 48)
     private let normalFont = Font.custom("DIN Condensed", size: 24)
     private let smallFont = Font.custom("DIN Condensed", size: 16)
@@ -74,7 +75,7 @@ struct ContentView: View {
                         VStack {
                             Text("GPS")
                                 .font(smallFont)
-                            Text("0.75 Hz")
+                            Text(String(format: "%.1f Hz", gpsPreview?.fps ?? 0))
                                 .font(normalFont)
                         }.frame(width: 70, height: 40)
                         VStack {
@@ -94,9 +95,9 @@ struct ContentView: View {
                     Spacer()
                     RecordButton(state: $isRecording,
                         begin: {
-                            let result = quadRecorder.start()
+                            result = quadRecorder.start()
                             // 処理が失敗した場合はアラートを表示
-                            if case let .failure(e) = result {
+                            if case let .failure(_) = result {
                                 errorAlert = true
                                 isRecording = false
                             }
@@ -104,17 +105,12 @@ struct ContentView: View {
                         end: {
                             result = quadRecorder.stop()
                             // 処理が失敗した場合はアラートを表示
-                            if case let .failure(e) = result {
+                            if case let .failure(_) = result {
                                 errorAlert = true
                             }
                         }
                     )
                     .padding(.bottom, 16)
-                    .alert(isPresented: $errorAlert) {
-                        var description: String? = nil
-                        if case let .failure(e) = result { description = e.description }
-                        return Alert(title: Text("Error"), message: Text(description ?? ""), dismissButton: .default(Text("OK")))
-                    }
                 }
 
                 // 録画一覧に飛ぶボタンの表示
@@ -132,21 +128,42 @@ struct ContentView: View {
             }})}
             else { Text("please wait").font(normalFont) }
         }
+        .alert(isPresented: $errorAlert) {
+            var description: String? = nil
+            if case let .failure(e) = result { description = e.description }
+            return Alert(title: Text("Error"), message: Text(description ?? ""), dismissButton: .default(Text("OK")))
+        }
         .onAppear {
-            print("appear")
-            let _ = quadRecorder.enable()
+            result = quadRecorder.enable()
+
+            // 処理が失敗した場合はアラートを表示
+            if case let .failure(_) = result {
+                errorAlert = true
+                isRecording = false
+                return
+            }
+
             quadRecorder.preview(
                 arPreview: { arPreview in
                     self.arPreview = arPreview
                 },
                 imuPreview: { imuPreview in
                     self.imuPreview = imuPreview
+                },
+                gpsPreview: { gpsPreview in
+                    self.gpsPreview = gpsPreview
                 }
             )
         }
         .onDisappear {
-            print("disappear")
-            let _ = quadRecorder.disable()
+            result = quadRecorder.disable()
+
+            // 処理が失敗した場合はアラートを表示
+            if case let .failure(_) = result {
+                errorAlert = true
+                isRecording = false
+                return
+            }
         }
     }
 }

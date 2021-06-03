@@ -5,7 +5,17 @@
 	<!--Info.plistの設定が反映されない場合はiOSを再起動することで解決できる場合がある-->
 
 	<!--カメラへのアクセス権限を得る-->
-	<key>NSCameraUsageDescription</key><string></string>
+	<key>NSCameraUsageDescription</key>
+	<string>We use your camera to record movie</string>
+
+	<!--GPSへのアクセス権限を得る-->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We use your location to record trajectory</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>trajectory</key>
+		<string>We use your location to record trajectory</string>
+	</dict>
 
 	<!--ファイルアプリから/Documentsの内容を表示できるようにする-->
 	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
