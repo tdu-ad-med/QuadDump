@@ -1,31 +1,39 @@
 import ARKit
 import SwiftUI
 
-class ARRecorder: NSObject, ARSessionDelegate {
-    private var session = ARSession()
+class CamRecorder: NSObject, ARSessionDelegate {
+    // カラーカメラとデプスカメラにアクセスするためのクラス
+    private let session = ARSession()
+    private let configuration = ARWorldTrackingConfiguration()
     private let delegateQueue = DispatchQueue.global(qos: .userInteractive)
+
+    // カメラへのアクセスが開始されているか
     private var isEnable: Bool = false
+
+    // 録画が開始されているか
     private var isRecording: Bool = false
+
+    // 録画開始時刻
+    private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
+
+    // カメラから最後にデータを取得した時刻
     private var lastUpdate: TimeInterval = 0.0
+
+    // 最後にpreviewCallbackを呼んだ時刻
     private var previewLastUpdate: TimeInterval = 0.0
-    private var previewCallback: ((ARPreview) -> ())? = nil
+
+    // カメラのプレビューを表示するときに呼ぶコールバック関数
+    private var previewCallback: ((CamPreview) -> ())? = nil
+
+    // カメラの画像をImageへ変換するために使用するCIContext
     private let context = CIContext(mtlDevice: MTLCreateSystemDefaultDevice()!, options: nil)
 
     override init() {
         super.init()
-        self.session.delegate = self
-    }
 
-    deinit { let _ = disable() }
-
-    func preview(_ preview: ((ARPreview) -> ())?) {
-        self.previewCallback = preview
-    }
-
-    func enable() -> SimpleResult {
-        if isEnable { return Err("ARは既に開始しています") }
-
-        let configuration = ARWorldTrackingConfiguration()
+        // delegateを設定
+        session.delegate = self
+        session.delegateQueue = self.delegateQueue
 
         // オートフォーカスを無効にする
         //configuration.isAutoFocusEnabled = false
@@ -34,44 +42,69 @@ class ARRecorder: NSObject, ARSessionDelegate {
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
             configuration.frameSemantics = .sceneDepth
         }
+    }
 
-        self.session.delegateQueue = self.delegateQueue
+    deinit {
+        if isEnable { let _ = disable() }
+    }
 
-        self.session.run(configuration)
+    // プレビュー画像を受け取るコールバック関数の登録
+    func preview(_ preview: ((CamPreview) -> ())?) {
+        previewCallback = preview
+    }
+
+    // カメラへのアクセスを開始
+    func enable() -> SimpleResult {
+        if isEnable { return Err("Cameraは既に開始しています") }
+
+        session.run(configuration)
         isEnable = true
 
         return Ok()
     }
 
+    // カメラへのアクセスを停止
     func disable() -> SimpleResult {
-        if (!isEnable) { return Err("ARは既に終了しています") }
-        let _ = stop()
-        self.session.pause()
+        if !isEnable { return Err("Cameraは既に終了しています") }
+
+        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        session.pause()
         isEnable = false
+
         return Ok()
     }
 
-    func start() -> SimpleResult {
-        self.delegateQueue.sync {
+    // 録画開始
+    func start(_ startTime: TimeInterval) -> SimpleResult {
+        if isRecording { return Err("録画は既に開始しています") }
+
+        delegateQueue.sync {
+            self.startTime = startTime
             self.isRecording = true
         }
+
         return Ok()
     }
 
+    // 録画終了
     func stop() -> SimpleResult {
-        self.delegateQueue.sync {
+        if !isRecording { return Err("録画は既に終了しています") }
+
+        delegateQueue.sync {
             self.isRecording = false
         }
+
         return Ok()
     }
 
+    // ARSessionからこのメソッドにカメラの映像が送られてくる
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         let colorPixelBuffer = frame.capturedImage
+        let colorSize = CGSize(width: CVPixelBufferGetWidth(colorPixelBuffer), height: CVPixelBufferGetHeight(colorPixelBuffer))
 
         let sceneDepth = frame.sceneDepth
         let depthPixelBuffer = sceneDepth?.depthMap
         let confidencePixelBuffer = sceneDepth?.confidenceMap
-        let colorSize = CGSize(width: CVPixelBufferGetWidth(colorPixelBuffer), height: CVPixelBufferGetHeight(colorPixelBuffer))
 
         let fps = 1.0 / (frame.timestamp - lastUpdate)
         lastUpdate = frame.timestamp
@@ -83,7 +116,7 @@ class ARRecorder: NSObject, ARSessionDelegate {
         let viewMatrix = camera.viewMatrix(for: orientation)
 
         // 以下はプレビューのための処理
-        guard let previewCallback = self.previewCallback else { return }
+        guard let previewCallback = previewCallback else { return }
 
         // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
         // あとで原因を探る
@@ -106,19 +139,19 @@ class ARRecorder: NSObject, ARSessionDelegate {
             }
 
             DispatchQueue.main.async {
-                previewCallback(ARPreview(
+                previewCallback(CamPreview(
                     colorImage: colorImage,
                     colorSize: colorSize,
                     depthImage: depthImage,
                     depthSize: depthSize,
-                    timestamp: frame.timestamp,
+                    timestamp: frame.timestamp - self.startTime,
                     fps: fps
                 ))
             }
         }
     }
 
-    struct ARPreview {
+    struct CamPreview {
         let colorImage: Image
         let colorSize: CGSize
         let depthImage: Image?

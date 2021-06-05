@@ -5,7 +5,7 @@ struct ContentView: View {
     @State private var isRecording: Bool = false
     @State private var errorAlert = false
     @State private var result: SimpleResult = Ok()
-    @State private var arPreview: ARRecorder.ARPreview? = nil
+    @State private var camPreview: CamRecorder.CamPreview? = nil
     @State private var imuPreview: IMURecorder.IMUPreview? = nil
     @State private var gpsPreview: GPSRecorder.GPSPreview? = nil
     @State private var timer: String = "00:00:00"
@@ -15,9 +15,9 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .center) {
-            if let arPreview = arPreview { GeometryReader(content: { geometry in ZStack {
+            if let camPreview = camPreview { GeometryReader(content: { geometry in ZStack {
                 // カメラをぼかした背景の表示
-                arPreview.colorImage
+                camPreview.colorImage
                     .resizable()
                     .scaledToFill()
                     .blur(radius: 10)
@@ -29,13 +29,13 @@ struct ContentView: View {
                 // カラーとデプスのプレビュー
                 VStack() {
                     let width = geometry.size.width
-                    let previewHeight = width * arPreview.colorSize.width / arPreview.colorSize.height
+                    let previewHeight = width * camPreview.colorSize.width / camPreview.colorSize.height
                     let top = max(geometry.size.height - previewHeight, 0) / 3
                     TabView {
-                        arPreview.colorImage
+                        camPreview.colorImage
                             .resizable()
                             .scaledToFit()
-                        if let depthImage = arPreview.depthImage {
+                        if let depthImage = camPreview.depthImage {
                             depthImage
                                 .resizable()
                                 .scaledToFit()
@@ -64,7 +64,7 @@ struct ContentView: View {
                         VStack {
                             Text("Camera")
                                 .font(smallFont)
-                            Text(String(format: "%.1f Hz", arPreview.fps))
+                            Text(String(format: "%.1f Hz", camPreview.fps))
                                 .font(normalFont)
                         }.frame(width: 70, height: 40)
                         VStack {
@@ -140,10 +140,10 @@ struct ContentView: View {
             }
 
             quadRecorder.preview(
-                arPreview: { arPreview in
-                    self.arPreview = arPreview
-                    if case let .recording(info) = self.quadRecorder.status {
-                        self.timer = (arPreview.timestamp - info.startTime).hhmmss
+                camPreview: { camPreview in
+                    self.camPreview = camPreview
+                    if case let .recording(_) = self.quadRecorder.status {
+                        self.timer = camPreview.timestamp.hhmmss
                     }
                 },
                 imuPreview: { imuPreview in

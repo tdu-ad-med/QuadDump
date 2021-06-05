@@ -1,12 +1,26 @@
 import CoreMotion
 
 class IMURecorder {
-    private var motionManager = CMMotionManager()
+    // IMUにアクセスするためのクラス
+    private let motionManager = CMMotionManager()
     private let operationQueue = OperationQueue()
+
+    // IMUへのアクセスが開始されているか
     private var isEnable: Bool = false
+
+    // 録画が開始されているか
     private var isRecording: Bool = false
+
+    // 録画開始時刻
+    private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
+
+    // IMUから最後にデータを取得した時刻
     private var lastUpdate: TimeInterval = 0.0
+
+    // 最後にpreviewCallbackを呼んだ時刻
     private var previewLastUpdate: TimeInterval = 0.0
+
+    // IMUのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((IMUPreview) -> ())? = nil
 
     init() {
@@ -14,13 +28,15 @@ class IMURecorder {
     }
 
     deinit {
-        let _ = disable()
+        if isEnable { let _ = disable() }
     }
 
+    // プレビューデータを受け取るコールバック関数の登録
     func preview(_ preview: ((IMUPreview) -> ())?) {
-        self.previewCallback = preview
+        previewCallback = preview
     }
 
+    // IMUへのアクセスを開始
     func enable() -> SimpleResult {
         if isEnable { return Err("IMUは既に開始しています") }
         guard motionManager.isDeviceMotionAvailable else { return Err("IMUの取得に失敗しました") }
@@ -34,21 +50,27 @@ class IMURecorder {
         return Ok()
     }
 
+    // IMUへのアクセスを停止
     func disable() -> SimpleResult {
-        if (!isEnable) { return Err("IMUは既に終了しています") }
-        let _ = stop()
+        if !isEnable { return Err("IMUは既に終了しています") }
+
+        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
         motionManager.stopDeviceMotionUpdates()
         isEnable = false
+
         return Ok()
     }
 
-    func start() -> SimpleResult {
+    // 録画開始
+    func start(_ startTime: TimeInterval) -> SimpleResult {
         operationQueue.addOperation({
+            self.startTime = startTime
             self.isRecording = true
         })
         return Ok()
     }
 
+    // 録画終了
     func stop() -> SimpleResult {
         operationQueue.addOperation({
             self.isRecording = false
@@ -56,6 +78,7 @@ class IMURecorder {
         return Ok()
     }
 
+    // IMUが更新されたときに呼ばれるメソッド
     func motionHandler(motion: CMDeviceMotion?, error: Error?) {
         guard let motion = motion, error == nil else { return }
 
@@ -65,7 +88,7 @@ class IMURecorder {
         let preview = IMUPreview(
             acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
             attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
-            timestamp: motion.timestamp,
+            timestamp: motion.timestamp - startTime,
             fps: fps
         )
 
