@@ -79,8 +79,8 @@ class MP4Writer {
         return Ok()
     }
 
-    func finish(handler: @escaping (AVAssetWriter.Status, Error?) -> Void) -> SimpleResult {
-        guard let (writer, track, _) = mp4 else { return Err("録画が開始されていません") }
+    func finish(error: ((String) -> ())? = nil) {
+        guard let (writer, track, _) = mp4 else { error?("録画が開始されていません"); return }
         mp4 = nil
 
         // トラックにこれ以上動画を追加できないようにする
@@ -91,9 +91,14 @@ class MP4Writer {
         // 動画生成終了
         writer.finishWriting {
             // ここは呼び出し元とは異なるスレッドから呼ばれるようです
-            handler(writer.status, writer.error)
+            if case .completed = writer.status {
+                // 書き込みが成功
+            }
+            else {
+                DispatchQueue.main.async {
+                    error?("動画の書き込みに失敗しました")
+                }
+            }
         }
-
-        return Ok()
     }
 }

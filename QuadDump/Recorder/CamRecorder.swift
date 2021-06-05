@@ -10,9 +10,13 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // カメラへのアクセスが開始されているか
     public private(set) var isEnable: Bool = false
 
-    // MP4を書き込むクラス
-    private let mp4Writer = MP4Writer()
-    public var isRecording: Bool { mp4Writer.isRecording }
+    // 動画を書き込むクラス
+    private let colorWriter = MP4Writer()  // カラーカメラ
+    private let depthWriter = ZlibWriter()  // デプスカメラ
+    private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
+    public var isRecording: Bool {
+        colorWriter.isRecording && depthWriter.isRecording && confidenceWriter.isRecording
+    }
 
     // カラーカメラの解像度とピクセルフォーマット (width, height, pixelFormat)
     private var colorCamInfo: (Int, Int, OSType)? = nil
@@ -20,7 +24,8 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
 
-    // カメラから最後にデータを取得した時刻
+    // カメラから最後にデータを取得したフレーム番号、時刻
+    private var lastFrameNumber: UInt64 = 0
     private var lastUpdate: TimeInterval = 0.0
 
     // 最後にpreviewCallbackを呼んだ時刻
@@ -87,12 +92,30 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
         delegateQueue.async {
             self.startTime = startTime
-            let result = self.mp4Writer.create(
+            self.lastFrameNumber = 0
+
+            // カラーカメラの記録を開始
+            if case let .failure(e) = self.colorWriter.create(
                 url: outputDir.appendingPathComponent("camera.mp4"),
                 width: info.0, height: info.1, pixelFormat: info.2
-            )
+            ) {
+                self.stop()
+                DispatchQueue.main.async{ error?(e.description) }
+            }
 
-            if case let .failure(e) = result {
+            // デプスカメラの記録を開始
+            if case let .failure(e) = self.depthWriter.create(
+                url: outputDir.appendingPathComponent("depth")
+            ) {
+                self.stop()
+                DispatchQueue.main.async{ error?(e.description) }
+            }
+
+            // デプスの信頼度の記録を開始
+            if case let .failure(e) = self.confidenceWriter.create(
+                url: outputDir.appendingPathComponent("confidence")
+            ) {
+                self.stop()
                 DispatchQueue.main.async{ error?(e.description) }
             }
         }
@@ -101,19 +124,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
         delegateQueue.async {
-            let result = self.mp4Writer.finish { status, _ in
-                // ここは呼び出し元とは異なるスレッドから呼ばれるようです
-                if case .completed = status {
-                    // 書き込みが成功
-                }
-                else {
-                    DispatchQueue.main.async{ error?("mp4の書き込みに失敗しました") }
-                }
-            }
-
-            if case let .failure(e) = result {
-                DispatchQueue.main.async{ error?(e.description) }
-            }
+            self.colorWriter.finish(error: error)
         }
     }
 
@@ -149,7 +160,20 @@ class CamRecorder: NSObject, ARSessionDelegate {
             let timestamp = frame.timestamp - startTime
             if timestamp >= 0 {
                 // カラーカメラの画像を追加
-                mp4Writer.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
+                colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
+
+                // デプスカメラの画像を追加
+                if let depthPixelBuffer = depthPixelBuffer {
+                    depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: lastFrameNumber)
+                }
+
+                // デプスカメラの画像を追加
+                if let confidencePixelBuffer = confidencePixelBuffer {
+                    confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
+                }
+
+                // フレーム番号の更新
+                lastFrameNumber += 1
             }
         }
 

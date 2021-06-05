@@ -3,82 +3,83 @@ import Foundation
 import AVFoundation
 import VideoToolbox
 
-class ZIPRecorder {
-    private var count: UInt64 = 0
-    private var outputDirURL: URL?
+class ZlibWriter {
+    private var outputDir: URL? = nil
     private var dstBuffer: UnsafeMutableBufferPointer<UInt8>?
-    
+
+    var isRecording: Bool { outputDir != nil }
+
     private func reset() {
         if let buffer = self.dstBuffer {
             buffer.deallocate()
             self.dstBuffer = nil
         }
-        self.count = 0
     }
 
     deinit {
         reset()
     }
 
-    func startRecord() {
+    func create(url: URL) -> SimpleResult {
         reset()
 
-        outputDirURL = FileManager.default.urls(
-            for: .documentDirectory, in: .userDomainMask
-        ).last!.appendingPathComponent("depth", isDirectory: true)
-        if FileManager.default.fileExists(atPath: outputDirURL!.path) { try! FileManager.default.removeItem(at: outputDirURL!) }
-        try! FileManager.default.createDirectory(atPath: outputDirURL!.path, withIntermediateDirectories: true, attributes: nil)
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+            try FileManager.default.createDirectory(atPath: url.path, withIntermediateDirectories: true, attributes: nil)
+        }
+        catch {
+            return Err("フォルダの作成に失敗しました")
+        }
+
+        outputDir = url
+        return Ok()
     }
 
-    func appendFrame(pixelBuffer: CVPixelBuffer) {
-        let capacity = CVPixelBufferGetBytesPerRow(pixelBuffer) * CVPixelBufferGetHeight(pixelBuffer)
+    func append(pixelBuffer: CVPixelBuffer, frameNumber: UInt64) -> SimpleResult {
+        guard let outputDir = outputDir else { return Err("録画が開始されていません") }
 
-        if nil == self.dstBuffer {
-            // zlibで圧縮後のデータサイズが圧縮前のデータサイズを上回ることがあるため
-            // 圧縮後のデータサイズを格納するためのメモリを多めに確保しておく
-            // There are cases where the size of zlib output data is lager than the size of input data.
-            // Therefore, allocate twice the memory of the input data.
-            self.dstBuffer = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: capacity * 2)
+        // zlibで圧縮後のデータサイズが圧縮前のデータサイズを上回ることがあるため
+        // 圧縮後のデータサイズを格納するためのメモリを多めに確保しておく
+        // There are cases where the size of zlib output data is lager than the size of input data.
+        // Therefore, allocate twice the memory of the input data.
+        let buffer_size = CVPixelBufferGetBytesPerRow(pixelBuffer) * CVPixelBufferGetHeight(pixelBuffer)
+        let capacity = buffer_size * 2
+        if (nil == dstBuffer) || (capacity > dstBuffer!.count) {
+            dstBuffer = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: capacity)
         }
-        guard
-            let dstBuffer = self.dstBuffer,
-            dstBuffer.count >= (capacity * 2)
-        else {
-            print("failed to compress")
-            return
-        }
+        guard let dstBuffer = dstBuffer else { return Err("メモリの確保に失敗しました") }
 
+        // 画像の圧縮
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         let compressedSize = compression_encode_buffer(
             dstBuffer.baseAddress!, dstBuffer.count,
-            CVPixelBufferGetBaseAddress(pixelBuffer)!.assumingMemoryBound(to: UInt8.self), capacity,
+            CVPixelBufferGetBaseAddress(pixelBuffer)!.assumingMemoryBound(to: UInt8.self), buffer_size,
             nil,
             COMPRESSION_ZLIB
         )
         CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-        if compressedSize == 0 {
-            print("failed to compress")
-            return
-        }
+        if 0 == compressedSize { Err("圧縮に失敗しました") }
 
-        let outputURL = outputDirURL!.appendingPathComponent("\(self.count)")
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try! FileManager.default.removeItem(at: outputURL)
+        let url = outputDir.appendingPathComponent(String(frameNumber))
+
+        // 既にファイルが存在する場合は削除
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
         }
+        catch { return Err("ファイルの作成に失敗しました") }
 
         // ファイルの作成
         guard FileManager.default.createFile(
-            atPath: outputURL.path,
+            atPath: url.path,
             contents: Data(bytes: dstBuffer.baseAddress!, count: compressedSize),
             attributes: nil
         )
-        else {
-            print("failed to create file")
-            return
-        }
+        else { return Err("ファイルの書き込みに失敗しました") }
 
-        // カウントの更新
-        // update count
-        self.count += 1
+        return Ok()
     }
 }
