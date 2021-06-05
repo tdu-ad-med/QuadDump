@@ -14,8 +14,10 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let colorWriter = MP4Writer()  // カラーカメラ
     private let depthWriter = ZlibWriter()  // デプスカメラ
     private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
+    private let cameraInfoWriter = RawWriter()  // その他カメラのパラメータ
     public var isRecording: Bool {
-        colorWriter.isRecording && depthWriter.isRecording && confidenceWriter.isRecording
+        colorWriter.isRecording && depthWriter.isRecording &&
+        confidenceWriter.isRecording && cameraInfoWriter.isRecording
     }
 
     // カラーカメラの解像度とピクセルフォーマット (width, height, pixelFormat)
@@ -100,7 +102,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 width: info.0, height: info.1, pixelFormat: info.2
             ) {
                 self.stop()
-                DispatchQueue.main.async{ error?(e.description) }
+                DispatchQueue.main.async { error?(e.description) }
             }
 
             // デプスカメラの記録を開始
@@ -108,7 +110,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 url: outputDir.appendingPathComponent("depth")
             ) {
                 self.stop()
-                DispatchQueue.main.async{ error?(e.description) }
+                DispatchQueue.main.async { error?(e.description) }
             }
 
             // デプスの信頼度の記録を開始
@@ -116,7 +118,15 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 url: outputDir.appendingPathComponent("confidence")
             ) {
                 self.stop()
-                DispatchQueue.main.async{ error?(e.description) }
+                DispatchQueue.main.async { error?(e.description) }
+            }
+
+            // その他のパラメータの記録を開始
+            if case let .failure(e) = self.cameraInfoWriter.create(
+                url: outputDir.appendingPathComponent("cameraInfo")
+            ) {
+                self.stop()
+                DispatchQueue.main.async { error?(e.description) }
             }
         }
     }
@@ -124,7 +134,12 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
         delegateQueue.async {
-            self.colorWriter.finish(error: error)
+            self.colorWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
+            self.cameraInfoWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
         }
     }
 
@@ -146,10 +161,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
         // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
         let orientation = UIInterfaceOrientation.landscapeRight
-        let camera = frame.camera
-        let cameraIntrinsicsInversed = camera.intrinsics.inverse
-        let projectionMatrix = camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
-        let viewMatrix = camera.viewMatrix(for: orientation)
+        let intr = frame.camera.intrinsics
+        let proj = frame.camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
+        let view = frame.camera.viewMatrix(for: orientation)
 
         // フレームレートの計算
         let fps = 1.0 / (frame.timestamp - lastUpdate)
@@ -160,16 +174,38 @@ class CamRecorder: NSObject, ARSessionDelegate {
             let timestamp = frame.timestamp - startTime
             if timestamp >= 0 {
                 // カラーカメラの画像を追加
-                colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
+                let _ = colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
 
                 // デプスカメラの画像を追加
                 if let depthPixelBuffer = depthPixelBuffer {
-                    depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: lastFrameNumber)
+                    let _ = depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: lastFrameNumber)
                 }
 
                 // デプスカメラの画像を追加
                 if let confidencePixelBuffer = confidencePixelBuffer {
-                    confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
+                    let _ = confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
+                }
+
+                // その他パラメータの記録
+                if case .success = cameraInfoWriter.append(data: [timestamp]) {
+                    let _ = cameraInfoWriter.append(data: [
+                        // ARFrame.camera.intrinsics
+                        intr[0, 0], intr[1, 0], intr[2, 0],
+                        intr[0, 1], intr[1, 1], intr[2, 1],
+                        intr[0, 2], intr[1, 2], intr[2, 2],
+
+                        // ARFrame.camera.projectionMatrix
+                        proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
+                        proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
+                        proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
+                        proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
+
+                        // ARFrame.camera.viewMatrix
+                        view[0, 0], view[1, 0], view[2, 0], view[3, 0],
+                        view[0, 1], view[1, 1], view[2, 1], view[3, 1],
+                        view[0, 2], view[1, 2], view[2, 2], view[3, 2],
+                        view[0, 3], view[1, 3], view[2, 3], view[3, 3]
+                    ])
                 }
 
                 // フレーム番号の更新

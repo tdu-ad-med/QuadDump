@@ -8,7 +8,7 @@ class MP4Writer {
 
     func create(url: URL, width: Int, height: Int, pixelFormat: OSType) -> SimpleResult {
         // 既に書き込みが開始している場合はエラー
-        if mp4 != nil { return Err("録画は既に開始しています") }
+        if isRecording { return Err("録画は既に開始しています") }
 
         do {
             // 既にファイルが存在する場合は削除
@@ -95,9 +95,7 @@ class MP4Writer {
                 // 書き込みが成功
             }
             else {
-                DispatchQueue.main.async {
-                    error?("動画の書き込みに失敗しました")
-                }
+                error?("動画の書き込みに失敗しました")
             }
         }
     }
