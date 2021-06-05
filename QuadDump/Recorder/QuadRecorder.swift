@@ -66,7 +66,7 @@ class QuadRecorder {
         )
 
         // 各センサーの録画開始
-        if case let .failure(e) = camRecorder.start(info.startTime) { return Err(e.description) }
+        if case let .failure(e) = camRecorder.start(outputDir, info.startTime) { return Err(e.description) }
         if case let .failure(e) = imuRecorder.start(info.startTime) { return Err(e.description) }
         if case let .failure(e) = gpsRecorder.start(info.startTime) { return Err(e.description) }
 

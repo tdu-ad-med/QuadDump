@@ -1,122 +1,99 @@
 import AVFoundation
 
-class MP4Recorder {
-    private var writer: AVAssetWriter?
-    private var tracks: [(AVAssetWriterInput, AVAssetWriterInputPixelBufferAdaptor)] = []
-    private var isRecord_: Bool = false
-    var isRecord: Bool {
-        get { return self.isRecord_ }
+class MP4Writer {
+    // MP4を書き込むクラス
+    private var mp4: (AVAssetWriter, AVAssetWriterInput, AVAssetWriterInputPixelBufferAdaptor)? = nil
+
+    var isRecording: Bool { mp4 != nil }
+
+    func create(url: URL, width: Int, height: Int, pixelFormat: OSType) -> SimpleResult {
+        // 既に書き込みが開始している場合はエラー
+        if mp4 != nil { return Err("録画は既に開始しています") }
+
+        do {
+            // 既にファイルが存在する場合は削除
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+
+            // 書き込み開始
+            let writer = try AVAssetWriter(outputURL: url, fileType: AVFileType.mp4) 
+
+            // トラックの作成
+            let track = AVAssetWriterInput(
+                mediaType: AVMediaType.video,
+                outputSettings: [
+                    AVVideoCodecKey : AVVideoCodecType.hevc,
+                    AVVideoWidthKey : width,
+                    AVVideoHeightKey: height,
+                ]
+            )
+            track.expectsMediaDataInRealTime = true
+            //track.transform = CGAffineTransform(rotationAngle: CGFloat.pi * 0.5)  // 映像の回転
+
+            // アダプタの作成
+            let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+                assetWriterInput: track,
+                sourcePixelBufferAttributes: [
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(pixelFormat),
+                    kCVPixelBufferWidthKey as String: width,
+                    kCVPixelBufferHeightKey as String: height
+                ]
+            )
+
+            // writerにトラックを追加
+            if writer.canAdd(track) { writer.add(track) }
+            else { return Err("mp4ファイルにトラックを追加できませんでした") }
+
+            // 録画開始
+            if !writer.startWriting() {
+                return Err("録画の開始に失敗しました")
+            }
+            writer.startSession(atSourceTime: CMTime.zero)
+
+            // 作成したインスタンスをプロパティに代入
+            mp4 = (writer, track, adaptor)
+        }
+        catch {
+            return Err("mp4ファイルの作成に失敗しました")
+        }
+
+        return Ok()
     }
 
-    func prepare() {
-        // 保存先のパスを取得
-        let outputURL = FileManager.default.urls(
-            for: .documentDirectory, in: .userDomainMask
-        ).last!.appendingPathComponent("preview.mp4")
+    func append(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval) -> SimpleResult {
+        guard let (_, _, adaptor) = mp4 else { return Err("録画が開始されていません") }
 
-        // 既にファイルが存在する場合は削除
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try! FileManager.default.removeItem(at: outputURL)
-        }
-
-        self.writer = try! AVAssetWriter(outputURL: outputURL, fileType: AVFileType.mp4) 
-        self.tracks = []
-    }
-
-    func addTrack(width: Int, height: Int, pixelFormat: OSType, lossless: Bool) -> Int? {
-        guard let writer = self.writer else {
-            return nil
-        }
-
-        if self.isRecord_ {
-            return nil
-        }
-
-        var outputSettings: [String : Any] = [
-            //AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoCodecKey: AVVideoCodecType.hevc,
-            AVVideoWidthKey: width,
-            AVVideoHeightKey: height,
-        ]
-        if lossless {
-            outputSettings[AVVideoCompressionPropertiesKey] = ["LossLess": true]
-        }
-        let writerInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: outputSettings)
-
-        // 映像の回転
-        writerInput.transform = CGAffineTransform(rotationAngle: CGFloat.pi * 0.5)
-        writer.add(writerInput)
-
-        let sourcePixelBufferAttributes: [String:Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(pixelFormat),
-            kCVPixelBufferWidthKey as String: width,
-            kCVPixelBufferHeightKey as String: height
-        ]
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-            assetWriterInput: writerInput,
-            sourcePixelBufferAttributes: sourcePixelBufferAttributes
-        )
-        writerInput.expectsMediaDataInRealTime = true
-
-        self.tracks.append((writerInput, adaptor))
-        return self.tracks.count - 1
-    }
-
-    func startRecord() {
-        guard let writer = self.writer else {
-            print("Failed to start writing.")
-            return
-        }
-
-        if self.isRecord_ {
-            print("Failed to start writing.")
-            return
-        }
-
-        // 動画生成開始
-        if (!writer.startWriting()) {
-            print("Failed to start writing.")
-            return
-        }
-
-        writer.startSession(atSourceTime: CMTime.zero)
-        self.isRecord_ = true
-    }
-
-    func appendFrame(
-        trackIndex: Int,
-        pixelBuffer: CVPixelBuffer,
-        timestamp: Int64
-    ) {
-        if (!self.isRecord_) { return }
-
-        let adaptor = self.tracks[trackIndex].1
+        // 処理が追い付いていない場合はフレームをスキップ
         if !adaptor.assetWriterInput.isReadyForMoreMediaData {
-            print("skip")
-            return
+            print("skip frame")
+            return Ok()
         }
-        let frameTime = CMTimeMake(value: timestamp, timescale: 1000)
+
+        // フレームを追加
+        let frameTime = CMTime(seconds: timestamp, preferredTimescale: 1000)
         if !adaptor.append(pixelBuffer, withPresentationTime: frameTime) {
-            print("Failed to append buffer.")
+            return Err("mp4ファイルにフレームを追加できませんでした")
         }
+
+        return Ok()
     }
 
-    func stopRecord() {
-        guard let writer = self.writer else {
-            return
-        }
+    func finish(handler: @escaping (AVAssetWriter.Status, Error?) -> Void) -> SimpleResult {
+        guard let (writer, track, _) = mp4 else { return Err("録画が開始されていません") }
+        mp4 = nil
+
+        // トラックにこれ以上動画を追加できないようにする
+        track.markAsFinished()
+
+        // メモ: writer.finishWriting を呼び出す場合は writer.endSession を呼び出さなくてもよい
 
         // 動画生成終了
-        for track in self.tracks {
-            track.0.markAsFinished()
-        }
-        //writer.endSession(atSourceTime: CMTimeMake(value: timestamp, timescale: 1000))
         writer.finishWriting {
-            print("Finish writing!")
+            // ここは呼び出し元とは異なるスレッドから呼ばれるようです
+            handler(writer.status, writer.error)
         }
 
-        self.writer = nil
-        self.tracks = []
-        self.isRecord_ = false
+        return Ok()
     }
 }

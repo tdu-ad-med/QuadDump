@@ -10,8 +10,11 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // カメラへのアクセスが開始されているか
     private var isEnable: Bool = false
 
-    // 録画が開始されているか
-    private var isRecording: Bool = false
+    // MP4を書き込むクラス
+    private let mp4Writer = MP4Writer()
+
+    // カラーカメラの解像度とピクセルフォーマット (width, height, pixelFormat)
+    private var colorCamInfo: (Int, Int, OSType)? = nil
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -67,7 +70,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
     func disable() -> SimpleResult {
         if !isEnable { return Err("Cameraは既に終了しています") }
 
-        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        if mp4Writer.isRecording { let _ = stop() }  // 録画中であれば録画を終了
         session.pause()
         isEnable = false
 
@@ -75,45 +78,69 @@ class CamRecorder: NSObject, ARSessionDelegate {
     }
 
     // 録画開始
-    func start(_ startTime: TimeInterval) -> SimpleResult {
-        if isRecording { return Err("録画は既に開始しています") }
+    func start(_ outputDir: URL, _ startTime: TimeInterval) -> SimpleResult {
+        guard let info = colorCamInfo else { return Err("カメラの解像度を取得できませんでした") }
 
+        var result = Ok()
         delegateQueue.sync {
             self.startTime = startTime
-            self.isRecording = true
+            result = self.mp4Writer.create(
+                url: outputDir.appendingPathComponent("camera.mp4"),
+                width: info.0, height: info.1, pixelFormat: info.2
+            )
         }
 
-        return Ok()
+        return result
     }
 
     // 録画終了
     func stop() -> SimpleResult {
-        if !isRecording { return Err("録画は既に終了しています") }
-
+        var result = Ok()
         delegateQueue.sync {
-            self.isRecording = false
+            result = self.mp4Writer.finish { _, _ in
+                // ここは呼び出し元とは異なるスレッドから呼ばれるようです
+                print("Finish writing!")
+            }
         }
 
-        return Ok()
+        return result
     }
 
     // ARSessionからこのメソッドにカメラの映像が送られてくる
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        // カラーカメラの画像と解像度、ピクセルフォーマットを取得
         let colorPixelBuffer = frame.capturedImage
-        let colorSize = CGSize(width: CVPixelBufferGetWidth(colorPixelBuffer), height: CVPixelBufferGetHeight(colorPixelBuffer))
+        let colorWidth: Int = CVPixelBufferGetWidth (colorPixelBuffer)
+        let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
+        let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
+        let colorSize = CGSize(width: colorWidth, height: colorHeight)
+        let colorCamInfo: (Int, Int, OSType) = (colorWidth, colorHeight, colorPixelFormat)
+        self.colorCamInfo = colorCamInfo
 
+        // デプスカメラの画像と信頼度マップの取得
         let sceneDepth = frame.sceneDepth
         let depthPixelBuffer = sceneDepth?.depthMap
         let confidencePixelBuffer = sceneDepth?.confidenceMap
 
-        let fps = 1.0 / (frame.timestamp - lastUpdate)
-        lastUpdate = frame.timestamp
-
+        // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
         let orientation = UIInterfaceOrientation.landscapeRight
         let camera = frame.camera
         let cameraIntrinsicsInversed = camera.intrinsics.inverse
         let projectionMatrix = camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
         let viewMatrix = camera.viewMatrix(for: orientation)
+
+        // フレームレートの計算
+        let fps = 1.0 / (frame.timestamp - lastUpdate)
+        lastUpdate = frame.timestamp
+
+        // 録画が開始されている場合
+        if mp4Writer.isRecording {
+            let timestamp = frame.timestamp - startTime
+            if timestamp >= 0 {
+                // カラーカメラの画像を追加
+                mp4Writer.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
+            }
+        }
 
         // 以下はプレビューのための処理
         guard let previewCallback = previewCallback else { return }
