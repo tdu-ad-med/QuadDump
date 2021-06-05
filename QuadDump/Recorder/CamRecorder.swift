@@ -8,10 +8,11 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let delegateQueue = DispatchQueue.global(qos: .userInteractive)
 
     // カメラへのアクセスが開始されているか
-    private var isEnable: Bool = false
+    public private(set) var isEnable: Bool = false
 
     // MP4を書き込むクラス
     private let mp4Writer = MP4Writer()
+    public var isRecording: Bool { mp4Writer.isRecording }
 
     // カラーカメラの解像度とピクセルフォーマット (width, height, pixelFormat)
     private var colorCamInfo: (Int, Int, OSType)? = nil
@@ -70,7 +71,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
     func disable() -> SimpleResult {
         if !isEnable { return Err("Cameraは既に終了しています") }
 
-        if mp4Writer.isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
         session.pause()
         isEnable = false
 
@@ -78,32 +79,42 @@ class CamRecorder: NSObject, ARSessionDelegate {
     }
 
     // 録画開始
-    func start(_ outputDir: URL, _ startTime: TimeInterval) -> SimpleResult {
-        guard let info = colorCamInfo else { return Err("カメラの解像度を取得できませんでした") }
+    func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
+        guard let info = colorCamInfo else {
+            error?("カメラの解像度を取得できませんでした")
+            return
+        }
 
-        var result = Ok()
-        delegateQueue.sync {
+        delegateQueue.async {
             self.startTime = startTime
-            result = self.mp4Writer.create(
+            let result = self.mp4Writer.create(
                 url: outputDir.appendingPathComponent("camera.mp4"),
                 width: info.0, height: info.1, pixelFormat: info.2
             )
-        }
 
-        return result
+            if case let .failure(e) = result {
+                DispatchQueue.main.async{ error?(e.description) }
+            }
+        }
     }
 
     // 録画終了
-    func stop() -> SimpleResult {
-        var result = Ok()
-        delegateQueue.sync {
-            result = self.mp4Writer.finish { _, _ in
+    func stop(error: ((String) -> ())? = nil) {
+        delegateQueue.async {
+            let result = self.mp4Writer.finish { status, _ in
                 // ここは呼び出し元とは異なるスレッドから呼ばれるようです
-                print("Finish writing!")
+                if case .completed = status {
+                    // 書き込みが成功
+                }
+                else {
+                    DispatchQueue.main.async{ error?("mp4の書き込みに失敗しました") }
+                }
+            }
+
+            if case let .failure(e) = result {
+                DispatchQueue.main.async{ error?(e.description) }
             }
         }
-
-        return result
     }
 
     // ARSessionからこのメソッドにカメラの映像が送られてくる
@@ -134,7 +145,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
         lastUpdate = frame.timestamp
 
         // 録画が開始されている場合
-        if mp4Writer.isRecording {
+        if isRecording {
             let timestamp = frame.timestamp - startTime
             if timestamp >= 0 {
                 // カラーカメラの画像を追加

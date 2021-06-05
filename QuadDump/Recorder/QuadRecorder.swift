@@ -42,9 +42,9 @@ class QuadRecorder {
     }
 
     // 録画開始
-    func start() -> SimpleResult {
-        if case .disable   = status { return Err("センサーへアクセスしていません") }
-        if case .recording = status { return Err("録画は既に開始しています") }
+    func start(error: ((String) -> ())? = nil) {
+        if case .disable   = status { error?("センサーへアクセスしていません"); return }
+        if case .recording = status { error?("録画は既に開始しています"); return }
 
         // 録画開始時刻の記録
         let startDate = Date()
@@ -55,7 +55,8 @@ class QuadRecorder {
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
         let outputDirName = formatter.string(from: startDate)
         guard let outputDir = URL.docs?.createDir(name: outputDirName) else {
-            return Err("保存先フォルダの作成に失敗しました")
+            error?("保存先フォルダの作成に失敗しました")
+            return
         }
 
         // 録画に関する情報を設定
@@ -66,28 +67,24 @@ class QuadRecorder {
         )
 
         // 各センサーの録画開始
-        if case let .failure(e) = camRecorder.start(outputDir, info.startTime) { return Err(e.description) }
-        if case let .failure(e) = imuRecorder.start(info.startTime) { return Err(e.description) }
-        if case let .failure(e) = gpsRecorder.start(info.startTime) { return Err(e.description) }
+        camRecorder.start(outputDir, info.startTime) { e in error?(e) }
+        if case let .failure(e) = imuRecorder.start(info.startTime) { error?(e.description) }
+        if case let .failure(e) = gpsRecorder.start(info.startTime) { error?(e.description) }
 
         status = .recording(info)
-
-        return Ok()
     }
 
     // 録画終了
-    func stop() -> SimpleResult {
-        if case .disable = status { return Err("センサーへアクセスしていません") }
-        if case .idol    = status { return Err("録画は既に終了しています") }
+    func stop(error: ((String) -> ())? = nil) {
+        if case .disable = status { error?("センサーへアクセスしていません") }
+        if case .idol    = status { error?("録画は既に終了しています") }
 
         // 各センサーの録画終了
-        if case let .failure(e) = camRecorder.stop() { return Err(e.description) }
-        if case let .failure(e) = imuRecorder.stop() { return Err(e.description) }
-        if case let .failure(e) = gpsRecorder.stop() { return Err(e.description) }
+        camRecorder.stop { e in error?(e) }
+        if case let .failure(e) = imuRecorder.stop() { error?(e.description) }
+        if case let .failure(e) = gpsRecorder.stop() { error?(e.description) }
 
         status = .idol
-
-        return Ok()
     }
 
     // 録画に関する情報
