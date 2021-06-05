@@ -59,4 +59,5 @@ security unlock-keychain login.keychain
 | :--- | :--- |
 | debug.sh | デバッグ実行用のスクリプト |
 | project.yml | xcodegenの設定ファイル |
-| QuadDump | プログラムを格納しているディレクトリ |
+| QuadDump | QuadDumpのプログラムを格納しているディレクトリ |
+| scripts | 録画したデータを操作するスクリプトを格納しているディレクトリ |
