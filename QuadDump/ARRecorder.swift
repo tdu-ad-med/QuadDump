@@ -1,7 +1,7 @@
 import ARKit
 import SwiftUI
 
-class ARRecorder: NSObject, ARSessionDelegate, Recorder {
+class ARRecorder: NSObject, ARSessionDelegate {
     private var session = ARSession()
     private let delegateQueue = DispatchQueue.global(qos: .userInteractive)
     private var isEnable: Bool = false
@@ -85,7 +85,9 @@ class ARRecorder: NSObject, ARSessionDelegate, Recorder {
         // 以下はプレビューのための処理
         guard let previewCallback = self.previewCallback else { return }
 
-        if (frame.timestamp - previewLastUpdate) > (1 / 20) {
+        // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
+        // あとで原因を探る
+        if (frame.timestamp - previewLastUpdate) > 0.05 {
             previewLastUpdate = frame.timestamp
 
             let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)

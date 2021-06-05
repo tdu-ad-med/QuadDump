@@ -1,6 +1,6 @@
 import CoreLocation
 
-class GPSRecorder: NSObject, CLLocationManagerDelegate, Recorder {
+class GPSRecorder: NSObject, CLLocationManagerDelegate {
     private var locationManager = CLLocationManager()
     private var isEnable: Bool = false
     private var isRecording: Bool = false
@@ -68,7 +68,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate, Recorder {
             )
 
             if index == (locations.count - 1) {
-                if (timestamp - previewLastUpdate) > (1 / 10) {
+                if (timestamp - previewLastUpdate) > 0.1 {
                     previewLastUpdate = timestamp
                     previewCallback?(preview)
                 }

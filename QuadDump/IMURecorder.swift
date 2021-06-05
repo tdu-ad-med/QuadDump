@@ -1,12 +1,17 @@
 import CoreMotion
 
-class IMURecorder: Recorder {
+class IMURecorder {
     private var motionManager = CMMotionManager()
+    private let operationQueue = OperationQueue()
     private var isEnable: Bool = false
     private var isRecording: Bool = false
     private var lastUpdate: TimeInterval = 0.0
     private var previewLastUpdate: TimeInterval = 0.0
     private var previewCallback: ((IMUPreview) -> ())? = nil
+
+    init() {
+        operationQueue.maxConcurrentOperationCount = 1
+    }
 
     deinit {
         let _ = disable()
@@ -22,7 +27,7 @@ class IMURecorder: Recorder {
         motionManager.deviceMotionUpdateInterval = 0.001
         motionManager.startDeviceMotionUpdates(
             using: .xMagneticNorthZVertical,
-            to: OperationQueue.current!,
+            to: operationQueue,
             withHandler: motionHandler
         )
         isEnable = true
@@ -38,12 +43,16 @@ class IMURecorder: Recorder {
     }
 
     func start() -> SimpleResult {
-        isRecording = true
+        operationQueue.addOperation({
+            self.isRecording = true
+        })
         return Ok()
     }
 
     func stop() -> SimpleResult {
-        isRecording = false
+        operationQueue.addOperation({
+            self.isRecording = false
+        })
         return Ok()
     }
 
@@ -71,9 +80,13 @@ class IMURecorder: Recorder {
             csv += String(motion.attitude.yaw) + "\n"
         }
 
-        if (motion.timestamp - previewLastUpdate) > (1 / 10) {
+        // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
+        // あとで原因を探る
+        if (motion.timestamp - previewLastUpdate) > 0.1 {
             previewLastUpdate = motion.timestamp
-            self.previewCallback?(preview)
+            DispatchQueue.main.async {
+                self.previewCallback?(preview)
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-class QuadRecorder: Recorder {
+class QuadRecorder {
     // setterのみをプライベートにする
     public private(set) var status: Status = .disable
 
