@@ -30,6 +30,7 @@ class RawWriter {
         return Ok()
     }
 
+    func append(data: [UInt64]) -> SimpleResult { return _append(data: data) }
     func append(data: [Float ]) -> SimpleResult { return _append(data: data) }
     func append(data: [Double]) -> SimpleResult { return _append(data: data) }
     private func _append<T: Numeric>(data: [T]) -> SimpleResult {

@@ -78,15 +78,21 @@ class QuadRecorder {
                 "depth/*": [
                     "width": camRecorder.depthCamInfo?.0 ?? 0,
                     "height": camRecorder.depthCamInfo?.1 ?? 0,
-                    "format": "zlib,grayscale,[float]"
+                    "format": "zlib,[[[float]]]"
                 ],
                 "confidence/*": [
                     "width": camRecorder.confidenceCamInfo?.0 ?? 0,
                     "height": camRecorder.confidenceCamInfo?.1 ?? 0,
-                    "format": "zlib,grayscale,[uint8]"
+                    "format": "zlib,[[[uint8]]]"
                 ],
                 "cameraPosition": [
-                    "format": "raw,[double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)]"
+                    "format": "raw,[uint64(frameNumber),double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)]"
+                ],
+                "imu": [
+                    "format": "raw,[double(timestampe),double3(accleration),double3(attitude)]"
+                ],
+                "gps": [
+                    "format": "raw,[double(timestampe),double(latitude),double(longitude),double(altitude),double(horizontalAccuracy),double(verticalAccuracy)]"
                 ]
             ], options: []),
             FileManager.default.createFile(

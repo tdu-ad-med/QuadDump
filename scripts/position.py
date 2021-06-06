@@ -12,7 +12,7 @@ def load_positions(path):
         while f.read(1):
             f.seek(-1, 1)
             result.append({
-                "frameNumber"      : len(result),
+                "frameNumber"      : np.frombuffer(f.read(8*1), dtype=np.uint64, count=1)[0],
                 "timestamp"        : np.frombuffer(f.read(8*1), dtype=np.float64, count=1)[0],
                 "intrinsics"       : np.frombuffer(f.read(4*3*3), dtype=np.float32, count=3*3).reshape(3, 3).copy(),
                 "projectionMatrix" : np.frombuffer(f.read(4*4*4), dtype=np.float32, count=4*4).reshape(4, 4).copy(),

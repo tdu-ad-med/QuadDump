@@ -199,25 +199,29 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 }
 
                 // カメラ座標の追加
-                if case .success = positionWriter.append(data: [timestamp]) {
-                    let _ = positionWriter.append(data: [
-                        // ARFrame.camera.intrinsics
-                        intr[0, 0], intr[1, 0], intr[2, 0],
-                        intr[0, 1], intr[1, 1], intr[2, 1],
-                        intr[0, 2], intr[1, 2], intr[2, 2],
+                // メモ: 以下の処理では3つあるappendのうち1つでも書き込みが失敗するとデータの並びが破綻する
+                //       そのため、lastFrameNumberとtimestampと行列をまとめてappendするように後で変更する
+                if case .success = positionWriter.append(data: [lastFrameNumber]) {
+                    if case .success = positionWriter.append(data: [timestamp]) {
+                        let _ = positionWriter.append(data: [
+                            // ARFrame.camera.intrinsics
+                            intr[0, 0], intr[1, 0], intr[2, 0],
+                            intr[0, 1], intr[1, 1], intr[2, 1],
+                            intr[0, 2], intr[1, 2], intr[2, 2],
 
-                        // ARFrame.camera.projectionMatrix
-                        proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
-                        proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
-                        proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
-                        proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
+                            // ARFrame.camera.projectionMatrix
+                            proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
+                            proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
+                            proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
+                            proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
 
-                        // ARFrame.camera.viewMatrix
-                        view[0, 0], view[1, 0], view[2, 0], view[3, 0],
-                        view[0, 1], view[1, 1], view[2, 1], view[3, 1],
-                        view[0, 2], view[1, 2], view[2, 2], view[3, 2],
-                        view[0, 3], view[1, 3], view[2, 3], view[3, 3]
-                    ])
+                            // ARFrame.camera.viewMatrix
+                            view[0, 0], view[1, 0], view[2, 0], view[3, 0],
+                            view[0, 1], view[1, 1], view[2, 1], view[3, 1],
+                            view[0, 2], view[1, 2], view[2, 2], view[3, 2],
+                            view[0, 3], view[1, 3], view[2, 3], view[3, 3]
+                        ])
+                    }
                 }
 
                 // フレーム番号の更新
