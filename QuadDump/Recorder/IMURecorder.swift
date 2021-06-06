@@ -8,8 +8,9 @@ class IMURecorder {
     // IMUへのアクセスが開始されているか
     private var isEnable: Bool = false
 
-    // 録画が開始されているか
-    private var isRecording: Bool = false
+    // IMUを録画するクラス
+    private let imuWriter = RawWriter()
+    public var isRecording: Bool { imuWriter.isRecording }
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -62,29 +63,34 @@ class IMURecorder {
     }
 
     // 録画開始
-    func start(_ startTime: TimeInterval) -> SimpleResult {
+    func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
         operationQueue.addOperation({
             self.startTime = startTime
-            self.isRecording = true
+            if case let .failure(e) = self.imuWriter.create( url: outputDir.appendingPathComponent("imu")) {
+                self.stop()
+                DispatchQueue.main.async { error?(e.description) }
+            }
         })
-        return Ok()
     }
 
     // 録画終了
-    func stop() -> SimpleResult {
+    func stop(error: ((String) -> ())? = nil) {
         operationQueue.addOperation({
-            self.isRecording = false
+            self.imuWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
         })
-        return Ok()
     }
 
     // IMUが更新されたときに呼ばれるメソッド
     func motionHandler(motion: CMDeviceMotion?, error: Error?) {
         guard let motion = motion, error == nil else { return }
 
+        // フレームレートの計算
         let fps = 1.0 / (motion.timestamp - lastUpdate)
         lastUpdate = motion.timestamp
 
+        // プレビュー用のデータ作成
         let preview = IMUPreview(
             acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
             attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
@@ -92,15 +98,17 @@ class IMURecorder {
             fps: fps
         )
 
+        // 録画が開始されている場合
         if isRecording {
-            var csv = ""
-            csv += String(motion.timestamp) + ","
-            csv += String(motion.userAcceleration.x) + ","
-            csv += String(motion.userAcceleration.y) + ","
-            csv += String(motion.userAcceleration.z) + ","
-            csv += String(motion.attitude.roll) + ","
-            csv += String(motion.attitude.pitch) + ","
-            csv += String(motion.attitude.yaw) + "\n"
+            let _ = imuWriter.append(data: [
+                preview.timestamp,
+                preview.acceleration.0,
+                preview.acceleration.1,
+                preview.acceleration.2,
+                preview.attitude.0,
+                preview.attitude.1,
+                preview.attitude.2
+            ])
         }
 
         // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている

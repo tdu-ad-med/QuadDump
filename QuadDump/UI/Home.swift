@@ -129,7 +129,7 @@ struct Home: View {
             result = quadRecorder.enable()
 
             // 処理が失敗した場合はアラートを表示
-            if case let .failure(_) = result {
+            if case .failure = result {
                 errorAlert = true
                 isRecording = false
                 return
@@ -138,7 +138,7 @@ struct Home: View {
             quadRecorder.preview(
                 camPreview: { camPreview in
                     self.camPreview = camPreview
-                    if case let .recording(_) = self.quadRecorder.status {
+                    if case .recording = self.quadRecorder.status {
                         self.timer = camPreview.timestamp.hhmmss
                     }
                 },
@@ -154,7 +154,7 @@ struct Home: View {
             result = quadRecorder.disable()
 
             // 処理が失敗した場合はアラートを表示
-            if case let .failure(_) = result {
+            if case .failure = result {
                 errorAlert = true
                 isRecording = false
                 return

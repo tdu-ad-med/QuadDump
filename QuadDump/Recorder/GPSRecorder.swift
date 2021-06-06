@@ -7,19 +7,20 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     // GPSへのアクセスが開始されているか
     private var isEnable: Bool = false
 
-    // 録画が開始されているか
-    private var isRecording: Bool = false
+    // GPSを録画するクラス
+    private let gpsWriter = RawWriter()
+    public var isRecording: Bool { gpsWriter.isRecording }
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
 
-    // IMUから最後にデータを取得した時刻
+    // GPSから最後にデータを取得した時刻
     private var lastUpdate: TimeInterval = 0.0
 
     // 最後にpreviewCallbackを呼んだ時刻
     private var previewLastUpdate: TimeInterval = 0.0
 
-    // IMUのプレビューを表示するときに呼ぶコールバック関数
+    //GPSSのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((GPSPreview) -> ())? = nil
 
     // インスタンス作成時刻
@@ -60,16 +61,19 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     }
 
     // 録画開始
-    func start(_ startTime: TimeInterval) -> SimpleResult {
+    func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
         self.startTime = startTime
-        isRecording = true
-        return Ok()
+        if case let .failure(e) = self.gpsWriter.create( url: outputDir.appendingPathComponent("gps")) {
+            self.stop()
+            DispatchQueue.main.async { error?(e.description) }
+        }
     }
 
     // 録画終了
-    func stop() -> SimpleResult {
-        isRecording = false
-        return Ok()
+    func stop(error: ((String) -> ())? = nil) {
+        self.gpsWriter.finish { e in
+            DispatchQueue.main.async { error?(e) }
+        }
     }
 
     // GPSが更新されたときに呼ばれるメソッド
@@ -78,9 +82,11 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
             // システムが起動してからの時刻に変換
             let timestamp = systemUptime.distance(to: location.timestamp)
 
+            // フレームレートの計算
             let fps = 1.0 / (timestamp - lastUpdate)
             lastUpdate = timestamp
             
+            // プレビュー用のデータ作成
             let preview = GPSPreview(
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
@@ -90,6 +96,18 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
                 timestamp: timestamp - startTime,
                 fps: fps
             )
+
+            // 録画が開始されている場合
+            if isRecording {
+                let _ = gpsWriter.append(data: [
+                    preview.timestamp,
+                    preview.latitude,
+                    preview.longitude,
+                    preview.altitude,
+                    preview.horizontalAccuracy,
+                    preview.verticalAccuracy
+                ])
+            }
 
             if index == (locations.count - 1) {
                 if (timestamp - previewLastUpdate) > 0.1 {

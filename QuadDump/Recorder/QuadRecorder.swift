@@ -98,8 +98,8 @@ class QuadRecorder {
 
         // 各センサーの録画開始
         camRecorder.start(outputDir, info.startTime) { e in error?(e) }
-        if case let .failure(e) = imuRecorder.start(info.startTime) { error?(e.description) }
-        if case let .failure(e) = gpsRecorder.start(info.startTime) { error?(e.description) }
+        imuRecorder.start(outputDir, info.startTime) { e in error?(e) }
+        gpsRecorder.start(outputDir, info.startTime) { e in error?(e) }
 
         status = .recording(info)
     }
@@ -111,8 +111,8 @@ class QuadRecorder {
 
         // 各センサーの録画終了
         camRecorder.stop { e in error?(e) }
-        if case let .failure(e) = imuRecorder.stop() { error?(e.description) }
-        if case let .failure(e) = gpsRecorder.stop() { error?(e.description) }
+        imuRecorder.stop { e in error?(e) }
+        gpsRecorder.stop { e in error?(e) }
 
         status = .idol
     }
