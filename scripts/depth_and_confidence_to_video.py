@@ -4,7 +4,7 @@ import ctypes
 import zlib
 import os
 
-date = "2021-06-05_23-40-22"
+date = "2021-06-06_09-21-57"
 
 def load_frames(path, w, h, t):
     files = os.listdir(path)
@@ -31,7 +31,7 @@ depth_frames[depth_frames < 0.0] = 0.0
 depth_frames = depth_frames.astype('uint8')
 
 confidence_frames = load_frames("./Documents/" + date + "/confidence", 256, 192, np.uint8)
-confidence_frames = (255 * confidence_frames / 3).astype('uint8')
+confidence_frames = (127 * confidence_frames).astype('uint8')
 
 FPS = 60
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
