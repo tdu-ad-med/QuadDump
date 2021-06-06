@@ -66,6 +66,36 @@ class QuadRecorder {
             outputDir: outputDir
         )
 
+        // 映像の情報を記述したテキストファイルを保存
+        guard
+            let colorCamInfo = camRecorder.colorCamInfo,
+            let videoInfo = try? JSONSerialization.data(withJSONObject: [
+                "camera.mp4": [
+                    "width": colorCamInfo.0,
+                    "height": colorCamInfo.1,
+                    "format": "hevc"
+                ],
+                "depth/*": [
+                    "width": camRecorder.depthCamInfo?.0 ?? 0,
+                    "height": camRecorder.depthCamInfo?.1 ?? 0,
+                    "format": "zlib,grayscale,[float]"
+                ],
+                "confidence/*": [
+                    "width": camRecorder.confidenceCamInfo?.0 ?? 0,
+                    "height": camRecorder.confidenceCamInfo?.1 ?? 0,
+                    "format": "zlib,grayscale,[uint8]"
+                ],
+                "cameraPosition": [
+                    "format": "raw,[double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)]"
+                ]
+            ], options: []),
+            FileManager.default.createFile(
+                atPath: outputDir.appendingPathComponent("info.json").path,
+                contents: videoInfo,
+                attributes: nil
+            )
+        else { error?("ファイルの書き込みに失敗しました"); return }
+
         // 各センサーの録画開始
         camRecorder.start(outputDir, info.startTime) { e in error?(e) }
         if case let .failure(e) = imuRecorder.start(info.startTime) { error?(e.description) }

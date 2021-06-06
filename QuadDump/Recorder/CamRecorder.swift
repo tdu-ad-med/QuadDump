@@ -14,14 +14,16 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let colorWriter = MP4Writer()  // カラーカメラ
     private let depthWriter = ZlibWriter()  // デプスカメラ
     private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
-    private let cameraInfoWriter = RawWriter()  // その他カメラのパラメータ
+    private let positionWriter = RawWriter()  // カメラ座標
     public var isRecording: Bool {
         colorWriter.isRecording && depthWriter.isRecording &&
-        confidenceWriter.isRecording && cameraInfoWriter.isRecording
+        confidenceWriter.isRecording && positionWriter.isRecording
     }
 
-    // カラーカメラの解像度とピクセルフォーマット (width, height, pixelFormat)
-    private var colorCamInfo: (Int, Int, OSType)? = nil
+    // カメラの解像度とピクセルフォーマット (width, height, pixelFormat)
+    public private(set) var colorCamInfo: (Int, Int, OSType)? = nil
+    public private(set) var depthCamInfo: (Int, Int, OSType)? = nil
+    public private(set) var confidenceCamInfo: (Int, Int, OSType)? = nil
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -122,8 +124,8 @@ class CamRecorder: NSObject, ARSessionDelegate {
             }
 
             // その他のパラメータの記録を開始
-            if case let .failure(e) = self.cameraInfoWriter.create(
-                url: outputDir.appendingPathComponent("cameraInfo")
+            if case let .failure(e) = self.positionWriter.create(
+                url: outputDir.appendingPathComponent("cameraPosition")
             ) {
                 self.stop()
                 DispatchQueue.main.async { error?(e.description) }
@@ -137,7 +139,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
             self.colorWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
-            self.cameraInfoWriter.finish { e in
+            self.positionWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
         }
@@ -158,6 +160,16 @@ class CamRecorder: NSObject, ARSessionDelegate {
         let sceneDepth = frame.sceneDepth
         let depthPixelBuffer = sceneDepth?.depthMap
         let confidencePixelBuffer = sceneDepth?.confidenceMap
+        if let depthPixelBuffer = depthPixelBuffer { depthCamInfo = (
+            CVPixelBufferGetWidth(depthPixelBuffer),
+            CVPixelBufferGetHeight(depthPixelBuffer),
+            CVPixelBufferGetPixelFormatType(depthPixelBuffer)
+        ) }
+        if let confidencePixelBuffer = confidencePixelBuffer { confidenceCamInfo = (
+            CVPixelBufferGetWidth(confidencePixelBuffer),
+            CVPixelBufferGetHeight(confidencePixelBuffer),
+            CVPixelBufferGetPixelFormatType(confidencePixelBuffer)
+        ) }
 
         // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
         let orientation = UIInterfaceOrientation.landscapeRight
@@ -186,9 +198,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
                     let _ = confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
                 }
 
-                // その他パラメータの記録
-                if case .success = cameraInfoWriter.append(data: [timestamp]) {
-                    let _ = cameraInfoWriter.append(data: [
+                // カメラ座標の追加
+                if case .success = positionWriter.append(data: [timestamp]) {
+                    let _ = positionWriter.append(data: [
                         // ARFrame.camera.intrinsics
                         intr[0, 0], intr[1, 0], intr[2, 0],
                         intr[0, 1], intr[1, 1], intr[2, 1],
