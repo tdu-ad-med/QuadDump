@@ -12,14 +12,24 @@ class QuadRecorder {
         let _ = disable()
     }
 
-    func preview(
-        camPreview: ((CamRecorder.CamPreview) -> ())? = nil,
-        imuPreview: ((IMURecorder.IMUPreview) -> ())? = nil,
-        gpsPreview: ((GPSRecorder.GPSPreview) -> ())? = nil
-    ) {
+    func preview(camPreview: ((CamRecorder.CamPreview) -> ())?) {
         camRecorder.preview(camPreview)
+    }
+    func preview(imuPreview: ((IMURecorder.IMUPreview) -> ())?) {
         imuRecorder.preview(imuPreview)
+    }
+    func preview(gpsPreview: ((GPSRecorder.GPSPreview) -> ())?) {
         gpsRecorder.preview(gpsPreview)
+    }
+
+    func timestamp(cam: ((TimeInterval, Double) -> ())?) {
+        camRecorder.timestamp(cam)
+    }
+    func timestamp(imu: ((TimeInterval, Double) -> ())?) {
+        imuRecorder.timestamp(imu)
+    }
+    func timestamp(gps: ((TimeInterval, Double) -> ())?) {
+        gpsRecorder.timestamp(gps)
     }
 
     // センサーへのアクセスを開始

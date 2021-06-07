@@ -37,6 +37,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
     // カメラのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((CamPreview) -> ())? = nil
+    private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
 
     // カメラの画像をImageへ変換するために使用するCIContext
     private let context = CIContext(mtlDevice: MTLCreateSystemDefaultDevice()!, options: nil)
@@ -64,6 +65,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // プレビュー画像を受け取るコールバック関数の登録
     func preview(_ preview: ((CamPreview) -> ())?) {
         previewCallback = preview
+    }
+    func timestamp(_ timestamp: ((TimeInterval, Double) -> ())?) {
+        timestampCallback = timestamp
     }
 
     // カメラへのアクセスを開始
@@ -227,13 +231,18 @@ class CamRecorder: NSObject, ARSessionDelegate {
             }
         }
 
-        // 以下はプレビューのための処理
-        guard let previewCallback = previewCallback else { return }
-
         // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
         // あとで原因を探る
-        if (frame.timestamp - previewLastUpdate) > 0.05 {
+        if (frame.timestamp - previewLastUpdate) > (1.0 / 30.0) {
             previewLastUpdate = frame.timestamp
+            let timestamp = frame.timestamp - startTime
+
+            DispatchQueue.main.async {
+                self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
+            }
+
+            // 以下はプレビューのための処理
+            guard let previewCallback = previewCallback else { return }
 
             let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
             guard let colorCGImage = context.createCGImage(colorCIImage, from: colorCIImage.extent) else { return }

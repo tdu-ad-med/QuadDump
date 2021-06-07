@@ -23,6 +23,7 @@ class IMURecorder {
 
     // IMUのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((IMUPreview) -> ())? = nil
+    private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
 
     init() {
         operationQueue.maxConcurrentOperationCount = 1
@@ -35,6 +36,9 @@ class IMURecorder {
     // プレビューデータを受け取るコールバック関数の登録
     func preview(_ preview: ((IMUPreview) -> ())?) {
         previewCallback = preview
+    }
+    func timestamp(_ timestamp: ((TimeInterval, Double) -> ())?) {
+        timestampCallback = timestamp
     }
 
     // IMUへのアクセスを開始
@@ -113,10 +117,11 @@ class IMURecorder {
 
         // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
         // あとで原因を探る
-        if (motion.timestamp - previewLastUpdate) > 0.1 {
+        if (motion.timestamp - previewLastUpdate) > (1.0 / 10.0) {
             previewLastUpdate = motion.timestamp
             DispatchQueue.main.async {
                 self.previewCallback?(preview)
+                self.timestampCallback?(preview.timestamp, preview.fps)
             }
         }
     }

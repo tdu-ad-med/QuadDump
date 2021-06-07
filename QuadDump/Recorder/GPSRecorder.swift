@@ -22,6 +22,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 
     //GPSSのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((GPSPreview) -> ())? = nil
+    private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
 
     // インスタンス作成時刻
     private let systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
@@ -33,6 +34,9 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     // プレビューデータを受け取るコールバック関数の登録
     func preview(_ preview: ((GPSPreview) -> ())?) {
         previewCallback = preview
+    }
+    func timestamp(_ timestamp: ((TimeInterval, Double) -> ())?) {
+        timestampCallback = timestamp
     }
 
     // GPSへのアクセスを開始
@@ -110,9 +114,10 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
             }
 
             if index == (locations.count - 1) {
-                if (timestamp - previewLastUpdate) > 0.1 {
+                if (timestamp - previewLastUpdate) > (1.0 / 10.0) {
                     previewLastUpdate = timestamp
                     previewCallback?(preview)
+                    timestampCallback?(isRecording ? timestamp : 0.0, fps)
                 }
             }
         }
@@ -126,6 +131,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
         case .authorizedAlways, .authorizedWhenInUse:  // GPSへのアクセス権があるとき
             // 高精度のGPS座標取得を要求
             locationManager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: "trajectory")
+        @unknown default:
+            break
         }
     }
 

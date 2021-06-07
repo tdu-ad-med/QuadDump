@@ -60,7 +60,7 @@ class ZlibWriter {
             COMPRESSION_ZLIB
         )
         CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-        if 0 == compressedSize { Err("圧縮に失敗しました") }
+        if 0 == compressedSize { return Err("圧縮に失敗しました") }
 
         let url = outputDir.appendingPathComponent(String(frameNumber))
 
