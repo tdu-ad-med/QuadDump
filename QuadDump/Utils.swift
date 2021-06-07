@@ -111,3 +111,13 @@ extension TimeInterval {
         return sign + String(format: "%02d:%02d:%02d", hh, mm, ss)
     }
 }
+
+extension Data {
+    mutating func append(contentsOf: [UInt64]) { _append(contentsOf: contentsOf) }
+    mutating func append(contentsOf: [Float]) { _append(contentsOf: contentsOf) }
+    mutating func append(contentsOf: [Double]) { _append(contentsOf: contentsOf) }
+    private mutating func _append<T>(contentsOf: [T]) {
+        let buffer = contentsOf.withUnsafeBytes { body in body.bindMemory(to: UInt8.self) }
+        append(buffer)
+    }
+}

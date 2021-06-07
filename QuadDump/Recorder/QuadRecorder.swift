@@ -78,21 +78,21 @@ class QuadRecorder {
                 "depth/*": [
                     "width": camRecorder.depthCamInfo?.0 ?? 0,
                     "height": camRecorder.depthCamInfo?.1 ?? 0,
-                    "format": "zlib,[[[float]]]"
+                    "format": "zlib,float[frame][height][width]"
                 ],
                 "confidence/*": [
                     "width": camRecorder.confidenceCamInfo?.0 ?? 0,
                     "height": camRecorder.confidenceCamInfo?.1 ?? 0,
-                    "format": "zlib,[[[uint8]]]"
+                    "format": "zlib,uint8[frame][height][width]"
                 ],
                 "cameraPosition": [
-                    "format": "raw,[uint64(frameNumber),double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)]"
+                    "format": "raw,{uint64(frameNumber),double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
                 ],
                 "imu": [
-                    "format": "raw,[double(timestampe),double3(accleration),double3(attitude)]"
+                    "format": "raw,{double(timestampe),double3(accleration),double3(attitude)}[frame]"
                 ],
                 "gps": [
-                    "format": "raw,[double(timestampe),double(latitude),double(longitude),double(altitude),double(horizontalAccuracy),double(verticalAccuracy)]"
+                    "format": "raw,{double(timestampe),double(latitude),double(longitude),double(altitude),double(horizontalAccuracy),double(verticalAccuracy)}[frame]"
                 ]
             ], options: []),
             FileManager.default.createFile(
