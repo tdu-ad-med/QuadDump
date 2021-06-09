@@ -21,10 +21,10 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let colorWriter = MP4Writer()  // カラーカメラ
     private let depthWriter = ZlibWriter()  // デプスカメラ
     private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
-    private let timestampWriter = RawWriter()  // カメラ座標
+    private let frameInfomationWriter = RawWriter()  // カメラ座標
     private var isRecording: Bool {
         colorWriter.isRecording && depthWriter.isRecording &&
-        confidenceWriter.isRecording && timestampWriter.isRecording
+        confidenceWriter.isRecording && frameInfomationWriter.isRecording
     }
 
     // カメラの解像度とピクセルフォーマット (width, height, pixelFormat)
@@ -137,8 +137,8 @@ class CamRecorder: NSObject, ARSessionDelegate {
             }
 
             // その他のパラメータの記録を開始
-            if case let .failure(e) = self.timestampWriter.create(
-                url: outputDir.appendingPathComponent("cameraTimestamp")
+            if case let .failure(e) = self.frameInfomationWriter.create(
+                url: outputDir.appendingPathComponent("cameraFrameInfo")
             ) {
                 self.stop()
                 DispatchQueue.main.async { error?(e.description) }
@@ -152,7 +152,13 @@ class CamRecorder: NSObject, ARSessionDelegate {
             self.colorWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
-            self.timestampWriter.finish { e in
+            self.depthWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
+            self.confidenceWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
+            self.frameInfomationWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
         }
@@ -207,21 +213,23 @@ class CamRecorder: NSObject, ARSessionDelegate {
                     let isColorFrameExist: UInt8 = self.colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
 
                     // デプスカメラの画像を追加
+                    var isDepthFrameExist: UInt8 = 0
                     if let depthPixelBuffer = depthPixelBuffer {
-                        let _ = self.depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: frameNumber)
+                        isDepthFrameExist = self.depthWriter.append(pixelBuffer: depthPixelBuffer).isSuccess ? 1 : 0
                     }
 
                     // デプスの信頼度マップの画像を追加
+                    var isConfidenceFrameExist: UInt8 = 0
                     if let confidencePixelBuffer = confidencePixelBuffer {
-                        let _ = self.confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: frameNumber)
+                        isConfidenceFrameExist = self.confidenceWriter.append(pixelBuffer: confidencePixelBuffer).isSuccess ? 1 : 0
                     }
 
                     // カメラ座標の追加
-                    var positionData = Data()
-                    positionData.append(contentsOf: [frameNumber])
-                    positionData.append(contentsOf: [timestamp])
-                    positionData.append(contentsOf: [isColorFrameExist])
-                    positionData.append(contentsOf: [
+                    var frameInfomation = Data()
+                    frameInfomation.append(contentsOf: [frameNumber])
+                    frameInfomation.append(contentsOf: [timestamp])
+                    frameInfomation.append(contentsOf: [isColorFrameExist, isDepthFrameExist, isConfidenceFrameExist])
+                    frameInfomation.append(contentsOf: [
                         // ARFrame.camera.intrinsics
                         intr[0, 0], intr[1, 0], intr[2, 0],
                         intr[0, 1], intr[1, 1], intr[2, 1],
@@ -239,7 +247,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
                         view[0, 2], view[1, 2], view[2, 2], view[3, 2],
                         view[0, 3], view[1, 3], view[2, 3], view[3, 3]
                     ])
-                    let _ = self.timestampWriter.append(data: positionData)
+                    let _ = self.frameInfomationWriter.append(data: frameInfomation)
                 }
             }
 

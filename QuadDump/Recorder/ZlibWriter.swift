@@ -4,15 +4,15 @@ import AVFoundation
 import VideoToolbox
 
 class ZlibWriter {
-    private var outputDir: URL? = nil
+    private let writer = RawWriter()
     private var dstBuffer: UnsafeMutableBufferPointer<UInt8>?
 
-    var isRecording: Bool { outputDir != nil }
+    var isRecording: Bool { writer.isRecording }
 
     private func reset() {
-        if let buffer = self.dstBuffer {
+        if let buffer = dstBuffer {
             buffer.deallocate()
-            self.dstBuffer = nil
+            dstBuffer = nil
         }
     }
 
@@ -22,23 +22,11 @@ class ZlibWriter {
 
     func create(url: URL) -> SimpleResult {
         reset()
-
-        do {
-            if FileManager.default.fileExists(atPath: url.path) {
-                try FileManager.default.removeItem(at: url)
-            }
-            try FileManager.default.createDirectory(atPath: url.path, withIntermediateDirectories: true, attributes: nil)
-        }
-        catch {
-            return Err("フォルダの作成に失敗しました")
-        }
-
-        outputDir = url
-        return Ok()
+        return writer.create(url: url)
     }
 
-    func append(pixelBuffer: CVPixelBuffer, frameNumber: UInt64) -> SimpleResult {
-        guard let outputDir = outputDir else { return Err("録画が開始されていません") }
+    func append(pixelBuffer: CVPixelBuffer) -> SimpleResult {
+        guard isRecording else { return Err("録画が開始されていません") }
 
         // zlibで圧縮後のデータサイズが圧縮前のデータサイズを上回ることがあるため
         // 圧縮後のデータサイズを格納するためのメモリを多めに確保しておく
@@ -62,24 +50,18 @@ class ZlibWriter {
         CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
         if 0 == compressedSize { return Err("圧縮に失敗しました") }
 
-        let url = outputDir.appendingPathComponent(String(frameNumber))
+        var data = Data()
 
-        // 既にファイルが存在する場合は削除
-        do {
-            if FileManager.default.fileExists(atPath: url.path) {
-                try FileManager.default.removeItem(at: url)
-            }
-        }
-        catch { return Err("ファイルの作成に失敗しました") }
+        // 圧縮後のサイズを記録
+        data.append(contentsOf: [UInt64(compressedSize)])
 
-        // ファイルの作成
-        guard FileManager.default.createFile(
-            atPath: url.path,
-            contents: Data(bytes: dstBuffer.baseAddress!, count: compressedSize),
-            attributes: nil
-        )
-        else { return Err("ファイルの書き込みに失敗しました") }
+        // 圧縮データを記録
+        data.append(Data(bytes: dstBuffer.baseAddress!, count: compressedSize))
 
-        return Ok()
+        return writer.append(data: data)
+    }
+
+    func finish(errorCallback: ((String) -> ())? = nil) {
+        return writer.finish(errorCallback: errorCallback)
     }
 }

@@ -85,18 +85,18 @@ class QuadRecorder {
                     "height": colorCamInfo.1,
                     "format": "hevc"
                 ],
-                "depth/*": [
+                "depth": [
                     "width": camRecorder.depthCamInfo?.0 ?? 0,
                     "height": camRecorder.depthCamInfo?.1 ?? 0,
-                    "format": "zlib,float[frame][height][width]"
+                    "format": "{uint64(zlibSize),zlib(float[height][width])}[frame]"
                 ],
-                "confidence/*": [
+                "confidence": [
                     "width": camRecorder.confidenceCamInfo?.0 ?? 0,
                     "height": camRecorder.confidenceCamInfo?.1 ?? 0,
-                    "format": "zlib,uint8[frame][height][width]"
+                    "format": "{uint64(zlibSize),zlib(uint8[height][width])}[frame]"
                 ],
-                "cameraTimestamp": [
-                    "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
+                "cameraFrameInfo": [
+                    "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),uint8(isDepthFrameExist),uint8(isConfidenceFrameExist),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
                 ],
                 "imu": [
                     "format": "raw,{double(timestampe),double3(accleration),double3(attitude)}[frame]"
