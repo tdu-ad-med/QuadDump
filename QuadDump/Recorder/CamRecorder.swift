@@ -5,7 +5,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
     // カラーカメラとデプスカメラにアクセスするためのクラス
     private let session = ARSession()
     private let configuration = ARWorldTrackingConfiguration()
-    private let delegateQueue = DispatchQueue.global(qos: .userInteractive)
+
+    // 注意: DispatchQueue.globalは複数のスレッドで実行される
+    private let encodeQueue = DispatchQueue.global(qos: .userInteractive)
 
     // カメラへのアクセスが開始されているか
     public private(set) var isEnable: Bool = false
@@ -14,10 +16,10 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let colorWriter = MP4Writer()  // カラーカメラ
     private let depthWriter = ZlibWriter()  // デプスカメラ
     private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
-    private let positionWriter = RawWriter()  // カメラ座標
+    private let timestampWriter = RawWriter()  // カメラ座標
     public var isRecording: Bool {
         colorWriter.isRecording && depthWriter.isRecording &&
-        confidenceWriter.isRecording && positionWriter.isRecording
+        confidenceWriter.isRecording && timestampWriter.isRecording
     }
 
     // カメラの解像度とピクセルフォーマット (width, height, pixelFormat)
@@ -47,7 +49,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
         // delegateを設定
         session.delegate = self
-        session.delegateQueue = self.delegateQueue
+        session.delegateQueue = DispatchQueue.main
 
         // オートフォーカスを無効にする
         //configuration.isAutoFocusEnabled = false
@@ -98,10 +100,10 @@ class CamRecorder: NSObject, ARSessionDelegate {
             return
         }
 
-        delegateQueue.async {
-            self.startTime = startTime
-            self.lastFrameNumber = 0
+        self.startTime = startTime
+        lastFrameNumber = 0
 
+        encodeQueue.async {
             // カラーカメラの記録を開始
             if case let .failure(e) = self.colorWriter.create(
                 url: outputDir.appendingPathComponent("camera.mp4"),
@@ -128,7 +130,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
             }
 
             // その他のパラメータの記録を開始
-            if case let .failure(e) = self.positionWriter.create(
+            if case let .failure(e) = self.timestampWriter.create(
                 url: outputDir.appendingPathComponent("cameraTimestamp")
             ) {
                 self.stop()
@@ -139,21 +141,22 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        delegateQueue.async {
+        encodeQueue.async {
             self.colorWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
-            self.positionWriter.finish { e in
+            self.timestampWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
         }
     }
 
     // ARSessionからこのメソッドにカメラの映像が送られてくる
+    var aaa: Int = -10
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         // カラーカメラの画像と解像度、ピクセルフォーマットを取得
         let colorPixelBuffer = frame.capturedImage
-        let colorWidth: Int = CVPixelBufferGetWidth (colorPixelBuffer)
+        let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
         let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
         let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
         let colorSize = CGSize(width: colorWidth, height: colorHeight)
@@ -182,53 +185,61 @@ class CamRecorder: NSObject, ARSessionDelegate {
         let view = frame.camera.viewMatrix(for: orientation)
 
         // フレームレートの計算
-        let fps = 1.0 / (frame.timestamp - lastUpdate)
-        lastUpdate = frame.timestamp
+        let fps = 1.0 / (frame.timestamp - self.lastUpdate)
+        self.lastUpdate = frame.timestamp
 
         // 録画が開始されている場合
         if isRecording {
             let timestamp = frame.timestamp - startTime
             if timestamp >= 0 {
-                // カラーカメラの画像を追加
-                let isColorFrameExist: UInt8 = colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
-
-                // デプスカメラの画像を追加
-                if let depthPixelBuffer = depthPixelBuffer {
-                    let _ = depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: lastFrameNumber)
-                }
-
-                // デプスの信頼度マップの画像を追加
-                if let confidencePixelBuffer = confidencePixelBuffer {
-                    let _ = confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
-                }
-
-                // カメラ座標の追加
-                var positionData = Data()
-                positionData.append(contentsOf: [lastFrameNumber])
-                positionData.append(contentsOf: [timestamp])
-                positionData.append(contentsOf: [isColorFrameExist])
-                positionData.append(contentsOf: [
-                    // ARFrame.camera.intrinsics
-                    intr[0, 0], intr[1, 0], intr[2, 0],
-                    intr[0, 1], intr[1, 1], intr[2, 1],
-                    intr[0, 2], intr[1, 2], intr[2, 2],
-
-                    // ARFrame.camera.projectionMatrix
-                    proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
-                    proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
-                    proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
-                    proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
-
-                    // ARFrame.camera.viewMatrix
-                    view[0, 0], view[1, 0], view[2, 0], view[3, 0],
-                    view[0, 1], view[1, 1], view[2, 1], view[3, 1],
-                    view[0, 2], view[1, 2], view[2, 2], view[3, 2],
-                    view[0, 3], view[1, 3], view[2, 3], view[3, 3]
-                ])
-                let _ = positionWriter.append(data: positionData)
-
                 // フレーム番号の更新
+                let frameNumber = lastFrameNumber
                 lastFrameNumber += 1
+
+                /*
+                メモ
+                encodeQueueは複数のスレッドから実行されるため、encodeQueue.async{}内部で安易にプロパティを書き換えないでください。
+                私はlastFrameNumberのインクリメントをencodeQueue内で行っていたため、フレーム番号が飛んだり重なったりするバグに遭遇しました。
+                */
+                encodeQueue.async {
+                    // カラーカメラの画像を追加
+                    let isColorFrameExist: UInt8 = self.colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
+
+                    // デプスカメラの画像を追加
+                    if let depthPixelBuffer = depthPixelBuffer {
+                        let _ = self.depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: frameNumber)
+                    }
+
+                    // デプスの信頼度マップの画像を追加
+                    if let confidencePixelBuffer = confidencePixelBuffer {
+                        let _ = self.confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: frameNumber)
+                    }
+
+                    // カメラ座標の追加
+                    var positionData = Data()
+                    positionData.append(contentsOf: [frameNumber])
+                    positionData.append(contentsOf: [timestamp])
+                    positionData.append(contentsOf: [isColorFrameExist])
+                    positionData.append(contentsOf: [
+                        // ARFrame.camera.intrinsics
+                        intr[0, 0], intr[1, 0], intr[2, 0],
+                        intr[0, 1], intr[1, 1], intr[2, 1],
+                        intr[0, 2], intr[1, 2], intr[2, 2],
+
+                        // ARFrame.camera.projectionMatrix
+                        proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
+                        proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
+                        proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
+                        proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
+
+                        // ARFrame.camera.viewMatrix
+                        view[0, 0], view[1, 0], view[2, 0], view[3, 0],
+                        view[0, 1], view[1, 1], view[2, 1], view[3, 1],
+                        view[0, 2], view[1, 2], view[2, 2], view[3, 2],
+                        view[0, 3], view[1, 3], view[2, 3], view[3, 3]
+                    ])
+                    let _ = self.timestampWriter.append(data: positionData)
+                }
             }
         }
 
@@ -238,9 +249,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
             previewLastUpdate = frame.timestamp
             let timestamp = frame.timestamp - startTime
 
-            DispatchQueue.main.async {
-                self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
-            }
+            timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
 
             // 以下はプレビューのための処理
             guard let previewCallback = previewCallback else { return }
@@ -260,16 +269,14 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 depthSize = CGSize(width: CVPixelBufferGetWidth(depthPixelBuffer), height: CVPixelBufferGetHeight(depthPixelBuffer))
             }
 
-            DispatchQueue.main.async {
-                previewCallback(CamPreview(
-                    colorImage: colorImage,
-                    colorSize: colorSize,
-                    depthImage: depthImage,
-                    depthSize: depthSize,
-                    timestamp: frame.timestamp - self.startTime,
-                    fps: fps
-                ))
-            }
+            previewCallback(CamPreview(
+                colorImage: colorImage,
+                colorSize: colorSize,
+                depthImage: depthImage,
+                depthSize: depthSize,
+                timestamp: frame.timestamp - startTime,
+                fps: fps
+            ))
         }
     }
 
