@@ -129,7 +129,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
             // その他のパラメータの記録を開始
             if case let .failure(e) = self.positionWriter.create(
-                url: outputDir.appendingPathComponent("cameraPosition")
+                url: outputDir.appendingPathComponent("cameraTimestamp")
             ) {
                 self.stop()
                 DispatchQueue.main.async { error?(e.description) }
@@ -190,14 +190,14 @@ class CamRecorder: NSObject, ARSessionDelegate {
             let timestamp = frame.timestamp - startTime
             if timestamp >= 0 {
                 // カラーカメラの画像を追加
-                let _ = colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
+                let isColorFrameExist: UInt8 = colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
 
                 // デプスカメラの画像を追加
                 if let depthPixelBuffer = depthPixelBuffer {
                     let _ = depthWriter.append(pixelBuffer: depthPixelBuffer, frameNumber: lastFrameNumber)
                 }
 
-                // デプスカメラの画像を追加
+                // デプスの信頼度マップの画像を追加
                 if let confidencePixelBuffer = confidencePixelBuffer {
                     let _ = confidenceWriter.append(pixelBuffer: confidencePixelBuffer, frameNumber: lastFrameNumber)
                 }
@@ -206,6 +206,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 var positionData = Data()
                 positionData.append(contentsOf: [lastFrameNumber])
                 positionData.append(contentsOf: [timestamp])
+                positionData.append(contentsOf: [isColorFrameExist])
                 positionData.append(contentsOf: [
                     // ARFrame.camera.intrinsics
                     intr[0, 0], intr[1, 0], intr[2, 0],

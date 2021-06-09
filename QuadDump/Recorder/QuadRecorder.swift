@@ -95,8 +95,8 @@ class QuadRecorder {
                     "height": camRecorder.confidenceCamInfo?.1 ?? 0,
                     "format": "zlib,uint8[frame][height][width]"
                 ],
-                "cameraPosition": [
-                    "format": "raw,{uint64(frameNumber),double(timestampe),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
+                "cameraTimestamp": [
+                    "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
                 ],
                 "imu": [
                     "format": "raw,{double(timestampe),double3(accleration),double3(attitude)}[frame]"

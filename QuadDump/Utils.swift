@@ -10,6 +10,16 @@ func Ok() -> SimpleResult {
 func Err(_ description: String) -> SimpleResult {
     return .failure(SimpleError(description: description))
 }
+extension SimpleResult {
+    var isSuccess: Bool {
+        switch self {
+        case .success(_):
+            return true
+        case .failure(_):
+            return false
+        }
+    }
+}
 
 extension URL {
     // DocumentsディレクトリへのURLを返す

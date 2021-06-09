@@ -66,8 +66,7 @@ class MP4Writer {
 
         // 処理が追い付いていない場合はフレームをスキップ
         if !adaptor.assetWriterInput.isReadyForMoreMediaData {
-            print("skip frame")
-            return Ok()
+            return Err("mp4ファイルにフレームを追加できませんでした")
         }
 
         // フレームを追加
