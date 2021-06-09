@@ -25,7 +25,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
 
     // インスタンス作成時刻
-    private let systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
+    private var systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
 
     deinit {
         if isEnable { let _ = disable() }
@@ -67,7 +67,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     // 録画開始
     func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
         self.startTime = startTime
-        if case let .failure(e) = self.gpsWriter.create( url: outputDir.appendingPathComponent("gps")) {
+        systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
+        if case let .failure(e) = self.gpsWriter.create(url: outputDir.appendingPathComponent("gps")) {
             self.stop()
             DispatchQueue.main.async { error?(e.description) }
         }
