@@ -121,7 +121,7 @@ class IMURecorder {
             previewLastUpdate = motion.timestamp
             DispatchQueue.main.async {
                 self.previewCallback?(preview)
-                self.timestampCallback?(preview.timestamp, preview.fps)
+                self.timestampCallback?(self.isRecording ? preview.timestamp : 0.0, fps)
             }
         }
     }

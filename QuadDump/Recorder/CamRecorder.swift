@@ -249,7 +249,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
             previewLastUpdate = frame.timestamp
             let timestamp = frame.timestamp - startTime
 
-            timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
+            timestampCallback?(isRecording ? timestamp : 0.0, fps)
 
             // 以下はプレビューのための処理
             guard let previewCallback = previewCallback else { return }

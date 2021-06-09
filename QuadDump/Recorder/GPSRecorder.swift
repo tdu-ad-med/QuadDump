@@ -118,7 +118,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
                 if (timestamp - previewLastUpdate) > (1.0 / 10.0) {
                     previewLastUpdate = timestamp
                     previewCallback?(preview)
-                    timestampCallback?(isRecording ? timestamp : 0.0, fps)
+                    timestampCallback?(isRecording ? preview.timestamp : 0.0, fps)
                 }
             }
         }

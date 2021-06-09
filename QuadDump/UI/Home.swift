@@ -67,10 +67,9 @@ struct CameraView: View {
 
 struct StatusTextView: View {
     let quadRecorder: QuadRecorder
-    @State private var timer: TimeInterval = 0.0
-    @State private var camFPS: Double = 0.0
-    @State private var imuFPS: Double = 0.0
-    @State private var gpsFPS: Double = 0.0
+    @State private var camTime: (TimeInterval, Double) = (0.0, 0.0)
+    @State private var imuTime: (TimeInterval, Double) = (0.0, 0.0)
+    @State private var gpsTime: (TimeInterval, Double) = (0.0, 0.0)
     private let timerFont = Font.custom("DIN Condensed", size: 48)
     private let normalFont = Font.custom("DIN Condensed", size: 24)
     private let smallFont = Font.custom("DIN Condensed", size: 16)
@@ -79,7 +78,7 @@ struct StatusTextView: View {
         ZStack {
             // 撮影時間の表示
             VStack {
-                Text(timer.hhmmss)
+                Text(camTime.0.hhmmss)
                     .font(timerFont)
                     .foregroundColor(Color(hex: 0xfeffff))
                     .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)
@@ -94,20 +93,26 @@ struct StatusTextView: View {
                     VStack {
                         Text("Camera")
                             .font(smallFont)
-                        Text(String(format: "%.1f Hz", camFPS))
+                        Text(String(format: "%.1f Hz", camTime.1))
                             .font(normalFont)
+                        Text(camTime.0.hhmmss)
+                            .font(smallFont)
                     }.frame(width: 70, height: 40)
                     VStack {
                         Text("IMU")
                             .font(smallFont)
-                        Text(String(format: "%.1f Hz", imuFPS))
+                        Text(String(format: "%.1f Hz", imuTime.1))
                             .font(normalFont)
+                        Text(imuTime.0.hhmmss)
+                            .font(smallFont)
                     }.frame(width: 70, height: 40)
                     VStack {
                         Text("GPS")
                             .font(smallFont)
-                        Text(String(format: "%.1f Hz", gpsFPS))
+                        Text(String(format: "%.1f Hz", gpsTime.1))
                             .font(normalFont)
+                        Text(gpsTime.0.hhmmss)
+                            .font(smallFont)
                     }.frame(width: 70, height: 40)
                 }
                 .padding(.bottom, 126)
@@ -117,14 +122,13 @@ struct StatusTextView: View {
         }
         .onAppear {
             quadRecorder.timestamp(cam: { (time, fps) in
-                self.camFPS = fps
-                self.timer = time
+                self.camTime = (time, fps)
             })
-            quadRecorder.timestamp(imu: { (_, fps) in
-                self.imuFPS = fps
+            quadRecorder.timestamp(imu: { (time, fps) in
+                self.imuTime = (time, fps)
             })
-            quadRecorder.timestamp(gps: { (_, fps) in
-                self.gpsFPS = fps
+            quadRecorder.timestamp(gps: { (time, fps) in
+                self.gpsTime = (time, fps)
             })
         }
     }
