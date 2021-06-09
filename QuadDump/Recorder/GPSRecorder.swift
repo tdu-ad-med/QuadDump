@@ -4,12 +4,20 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     // GPSにアクセスするためのクラス
     private let locationManager = CLLocationManager()
 
+    private let encodeQueue: OperationQueue = {
+        // 2つ以上のスレッドから同時にファイルへ書き込まれるとよくないので
+        // OperationQueueの並列化はしない
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
+
     // GPSへのアクセスが開始されているか
     private var isEnable: Bool = false
 
     // GPSを録画するクラス
     private let gpsWriter = RawWriter()
-    public var isRecording: Bool { gpsWriter.isRecording }
+    private var isRecording: Bool { gpsWriter.isRecording }
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -57,7 +65,9 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     func disable() -> SimpleResult {
         if (!isEnable) { return Err("GPSは既に終了しています") }
 
-        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        encodeQueue.addOperation {
+            if self.isRecording { self.stop() }  // 録画中であれば録画を終了
+        }
         locationManager.stopUpdatingLocation()
         isEnable = false
 
@@ -66,59 +76,67 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 
     // 録画開始
     func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
-        self.startTime = startTime
-        systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
-        if case let .failure(e) = self.gpsWriter.create(url: outputDir.appendingPathComponent("gps")) {
-            self.stop()
-            DispatchQueue.main.async { error?(e.description) }
+        encodeQueue.addOperation {
+            self.startTime = startTime
+            self.systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
+            if case let .failure(e) = self.gpsWriter.create(url: outputDir.appendingPathComponent("gps")) {
+                self.stop()
+                DispatchQueue.main.async { error?(e.description) }
+            }
         }
     }
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        self.gpsWriter.finish { e in
-            DispatchQueue.main.async { error?(e) }
+        encodeQueue.addOperation {
+            self.gpsWriter.finish { e in
+                DispatchQueue.main.async { error?(e) }
+            }
         }
     }
 
     // GPSが更新されたときに呼ばれるメソッド
     func locationManager(_ locationManager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        for (index, location) in locations.enumerated() {
-            // システムが起動してからの時刻に変換
-            let timestamp = systemUptime.distance(to: location.timestamp)
+        encodeQueue.addOperation {
+            for (index, location) in locations.enumerated() {
+                // システムが起動してからの時刻に変換
+                let timestamp = self.systemUptime.distance(to: location.timestamp)
 
-            // フレームレートの計算
-            let fps = 1.0 / (timestamp - lastUpdate)
-            lastUpdate = timestamp
-            
-            // プレビュー用のデータ作成
-            let preview = GPSPreview(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude,
-                altitude: location.altitude,
-                horizontalAccuracy: location.horizontalAccuracy,
-                verticalAccuracy: location.verticalAccuracy,
-                timestamp: timestamp - startTime,
-                fps: fps
-            )
+                // フレームレートの計算
+                let fps = 1.0 / (timestamp - self.lastUpdate)
+                self.lastUpdate = timestamp
 
-            // 録画が開始されている場合
-            if isRecording {
-                let _ = gpsWriter.append(data: [
-                    preview.timestamp,
-                    preview.latitude,
-                    preview.longitude,
-                    preview.altitude,
-                    preview.horizontalAccuracy,
-                    preview.verticalAccuracy
-                ])
-            }
+                // プレビュー用のデータ作成
+                let preview = GPSPreview(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude,
+                    altitude: location.altitude,
+                    horizontalAccuracy: location.horizontalAccuracy,
+                    verticalAccuracy: location.verticalAccuracy,
+                    timestamp: timestamp - self.startTime,
+                    fps: fps
+                )
 
-            if index == (locations.count - 1) {
-                if (timestamp - previewLastUpdate) > (1.0 / 10.0) {
-                    previewLastUpdate = timestamp
-                    previewCallback?(preview)
-                    timestampCallback?(isRecording ? preview.timestamp : 0.0, fps)
+                // 録画が開始されている場合
+                if self.isRecording {
+                    let _ = self.gpsWriter.append(data: [
+                        preview.timestamp,
+                        preview.latitude,
+                        preview.longitude,
+                        preview.altitude,
+                        preview.horizontalAccuracy,
+                        preview.verticalAccuracy
+                    ])
+                }
+
+                if index == (locations.count - 1) {
+                    if (timestamp - self.previewLastUpdate) > (1.0 / 10.0) {
+                        self.previewLastUpdate = timestamp
+                        DispatchQueue.main.async {
+                            self.timestampCallback?(self.isRecording ? preview.timestamp : 0.0, fps)
+                            self.previewCallback?(preview)
+                        }
+                    }
                 }
             }
         }

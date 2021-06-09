@@ -3,14 +3,21 @@ import CoreMotion
 class IMURecorder {
     // IMUにアクセスするためのクラス
     private let motionManager = CMMotionManager()
-    private let operationQueue = OperationQueue()
+
+    private let encodeQueue: OperationQueue = {
+        // 2つ以上のスレッドから同時にファイルへ書き込まれるとよくないので
+        // OperationQueueの並列化はしない
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
 
     // IMUへのアクセスが開始されているか
     private var isEnable: Bool = false
 
     // IMUを録画するクラス
     private let imuWriter = RawWriter()
-    public var isRecording: Bool { imuWriter.isRecording }
+    private var isRecording: Bool { imuWriter.isRecording }
 
     // 録画開始時刻
     private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
@@ -24,10 +31,6 @@ class IMURecorder {
     // IMUのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((IMUPreview) -> ())? = nil
     private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
-
-    init() {
-        operationQueue.maxConcurrentOperationCount = 1
-    }
 
     deinit {
         if isEnable { let _ = disable() }
@@ -48,7 +51,7 @@ class IMURecorder {
         motionManager.deviceMotionUpdateInterval = 0.001
         motionManager.startDeviceMotionUpdates(
             using: .xMagneticNorthZVertical,
-            to: operationQueue,
+            to: encodeQueue,
             withHandler: motionHandler
         )
         isEnable = true
@@ -59,7 +62,9 @@ class IMURecorder {
     func disable() -> SimpleResult {
         if !isEnable { return Err("IMUは既に終了しています") }
 
-        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        encodeQueue.addOperation {
+            if self.isRecording { self.stop() }  // 録画中であれば録画を終了
+        }
         motionManager.stopDeviceMotionUpdates()
         isEnable = false
 
@@ -68,22 +73,22 @@ class IMURecorder {
 
     // 録画開始
     func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
-        operationQueue.addOperation({
+        encodeQueue.addOperation {
             self.startTime = startTime
             if case let .failure(e) = self.imuWriter.create( url: outputDir.appendingPathComponent("imu")) {
                 self.stop()
                 DispatchQueue.main.async { error?(e.description) }
             }
-        })
+        }
     }
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        operationQueue.addOperation({
+        encodeQueue.addOperation {
             self.imuWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
-        })
+        }
     }
 
     // IMUが更新されたときに呼ばれるメソッド
@@ -120,8 +125,8 @@ class IMURecorder {
         if (motion.timestamp - previewLastUpdate) > (1.0 / 10.0) {
             previewLastUpdate = motion.timestamp
             DispatchQueue.main.async {
-                self.previewCallback?(preview)
                 self.timestampCallback?(self.isRecording ? preview.timestamp : 0.0, fps)
+                self.previewCallback?(preview)
             }
         }
     }

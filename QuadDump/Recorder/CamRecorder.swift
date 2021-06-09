@@ -6,8 +6,13 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let session = ARSession()
     private let configuration = ARWorldTrackingConfiguration()
 
-    // 注意: DispatchQueue.globalは複数のスレッドで実行される
-    private let encodeQueue = DispatchQueue.global(qos: .userInteractive)
+    private let encodeQueue: OperationQueue = {
+        // 2つ以上のスレッドから同時にファイルへ書き込まれるとよくないので
+        // OperationQueueの並列化はしない
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
 
     // カメラへのアクセスが開始されているか
     public private(set) var isEnable: Bool = false
@@ -17,7 +22,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private let depthWriter = ZlibWriter()  // デプスカメラ
     private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
     private let timestampWriter = RawWriter()  // カメラ座標
-    public var isRecording: Bool {
+    private var isRecording: Bool {
         colorWriter.isRecording && depthWriter.isRecording &&
         confidenceWriter.isRecording && timestampWriter.isRecording
     }
@@ -86,7 +91,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
     func disable() -> SimpleResult {
         if !isEnable { return Err("Cameraは既に終了しています") }
 
-        if isRecording { let _ = stop() }  // 録画中であれば録画を終了
+        encodeQueue.addOperation {
+            if self.isRecording { self.stop() }  // 録画中であれば録画を終了
+        }
         session.pause()
         isEnable = false
 
@@ -103,7 +110,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
         self.startTime = startTime
         lastFrameNumber = 0
 
-        encodeQueue.async {
+        encodeQueue.addOperation {
             // カラーカメラの記録を開始
             if case let .failure(e) = self.colorWriter.create(
                 url: outputDir.appendingPathComponent("camera.mp4"),
@@ -141,7 +148,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        encodeQueue.async {
+        encodeQueue.addOperation {
             self.colorWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
@@ -152,56 +159,50 @@ class CamRecorder: NSObject, ARSessionDelegate {
     }
 
     // ARSessionからこのメソッドにカメラの映像が送られてくる
-    var aaa: Int = -10
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // カラーカメラの画像と解像度、ピクセルフォーマットを取得
-        let colorPixelBuffer = frame.capturedImage
-        let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
-        let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
-        let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
-        let colorSize = CGSize(width: colorWidth, height: colorHeight)
-        let colorCamInfo: (Int, Int, OSType) = (colorWidth, colorHeight, colorPixelFormat)
-        self.colorCamInfo = colorCamInfo
+        encodeQueue.addOperation {
+            // カラーカメラの画像と解像度、ピクセルフォーマットを取得
+            let colorPixelBuffer = frame.capturedImage
+            let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
+            let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
+            let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
+            let colorSize = CGSize(width: colorWidth, height: colorHeight)
+            let colorCamInfo: (Int, Int, OSType) = (colorWidth, colorHeight, colorPixelFormat)
+            self.colorCamInfo = colorCamInfo
 
-        // デプスカメラの画像と信頼度マップの取得
-        let sceneDepth = frame.sceneDepth
-        let depthPixelBuffer = sceneDepth?.depthMap
-        let confidencePixelBuffer = sceneDepth?.confidenceMap
-        if let depthPixelBuffer = depthPixelBuffer { depthCamInfo = (
-            CVPixelBufferGetWidth(depthPixelBuffer),
-            CVPixelBufferGetHeight(depthPixelBuffer),
-            CVPixelBufferGetPixelFormatType(depthPixelBuffer)
-        ) }
-        if let confidencePixelBuffer = confidencePixelBuffer { confidenceCamInfo = (
-            CVPixelBufferGetWidth(confidencePixelBuffer),
-            CVPixelBufferGetHeight(confidencePixelBuffer),
-            CVPixelBufferGetPixelFormatType(confidencePixelBuffer)
-        ) }
+            // デプスカメラの画像と信頼度マップの取得
+            let sceneDepth = frame.sceneDepth
+            let depthPixelBuffer = sceneDepth?.depthMap
+            let confidencePixelBuffer = sceneDepth?.confidenceMap
+            if let depthPixelBuffer = depthPixelBuffer { self.depthCamInfo = (
+                CVPixelBufferGetWidth(depthPixelBuffer),
+                CVPixelBufferGetHeight(depthPixelBuffer),
+                CVPixelBufferGetPixelFormatType(depthPixelBuffer)
+            ) }
+            if let confidencePixelBuffer = confidencePixelBuffer { self.confidenceCamInfo = (
+                CVPixelBufferGetWidth(confidencePixelBuffer),
+                CVPixelBufferGetHeight(confidencePixelBuffer),
+                CVPixelBufferGetPixelFormatType(confidencePixelBuffer)
+            ) }
 
-        // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
-        let orientation = UIInterfaceOrientation.landscapeRight
-        let intr = frame.camera.intrinsics
-        let proj = frame.camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
-        let view = frame.camera.viewMatrix(for: orientation)
+            // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
+            let orientation = UIInterfaceOrientation.landscapeRight
+            let intr = frame.camera.intrinsics
+            let proj = frame.camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
+            let view = frame.camera.viewMatrix(for: orientation)
 
-        // フレームレートの計算
-        let fps = 1.0 / (frame.timestamp - self.lastUpdate)
-        self.lastUpdate = frame.timestamp
+            // フレームレートの計算
+            let fps = 1.0 / (frame.timestamp - self.lastUpdate)
+            self.lastUpdate = frame.timestamp
 
-        // 録画が開始されている場合
-        if isRecording {
-            let timestamp = frame.timestamp - startTime
-            if timestamp >= 0 {
-                // フレーム番号の更新
-                let frameNumber = lastFrameNumber
-                lastFrameNumber += 1
+            // 録画が開始されている場合
+            if self.isRecording {
+                let timestamp = frame.timestamp - self.startTime
+                if timestamp >= 0 {
+                    // フレーム番号の更新
+                    let frameNumber = self.lastFrameNumber
+                    self.lastFrameNumber += 1
 
-                /*
-                メモ
-                encodeQueueは複数のスレッドから実行されるため、encodeQueue.async{}内部で安易にプロパティを書き換えないでください。
-                私はlastFrameNumberのインクリメントをencodeQueue内で行っていたため、フレーム番号が飛んだり重なったりするバグに遭遇しました。
-                */
-                encodeQueue.async {
                     // カラーカメラの画像を追加
                     let isColorFrameExist: UInt8 = self.colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
 
@@ -241,42 +242,46 @@ class CamRecorder: NSObject, ARSessionDelegate {
                     let _ = self.timestampWriter.append(data: positionData)
                 }
             }
-        }
 
-        // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
-        // あとで原因を探る
-        if (frame.timestamp - previewLastUpdate) > (1.0 / 30.0) {
-            previewLastUpdate = frame.timestamp
-            let timestamp = frame.timestamp - startTime
+            // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
+            // あとで原因を探る
+            if (frame.timestamp - self.previewLastUpdate) > (1.0 / 30.0) {
+                self.previewLastUpdate = frame.timestamp
+                let timestamp = frame.timestamp - self.startTime
 
-            timestampCallback?(isRecording ? timestamp : 0.0, fps)
+                DispatchQueue.main.async {
+                    self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
+                }
 
-            // 以下はプレビューのための処理
-            guard let previewCallback = previewCallback else { return }
+                // 以下はプレビューのための処理
+                guard let previewCallback = self.previewCallback else { return }
 
-            let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
-            guard let colorCGImage = context.createCGImage(colorCIImage, from: colorCIImage.extent) else { return }
-            let colorUIImage = UIImage(cgImage: colorCGImage)
-            let colorImage = Image(uiImage: colorUIImage)
+                let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
+                guard let colorCGImage = self.context.createCGImage(colorCIImage, from: colorCIImage.extent) else { return }
+                let colorUIImage = UIImage(cgImage: colorCGImage)
+                let colorImage = Image(uiImage: colorUIImage)
 
-            var depthImage: Image? = nil
-            var depthSize: CGSize = .zero
-            if let depthPixelBuffer = depthPixelBuffer {
-                let depthCIImage = CIImage(cvPixelBuffer: depthPixelBuffer).oriented(CGImagePropertyOrientation.right)
-                guard let depthCGImage = context.createCGImage(depthCIImage, from: depthCIImage.extent) else { return }
-                let depthUIImage = UIImage(cgImage: depthCGImage)
-                depthImage = Image(uiImage: depthUIImage)
-                depthSize = CGSize(width: CVPixelBufferGetWidth(depthPixelBuffer), height: CVPixelBufferGetHeight(depthPixelBuffer))
+                var depthImage: Image? = nil
+                var depthSize: CGSize = .zero
+                if let depthPixelBuffer = depthPixelBuffer {
+                    let depthCIImage = CIImage(cvPixelBuffer: depthPixelBuffer).oriented(CGImagePropertyOrientation.right)
+                    guard let depthCGImage = self.context.createCGImage(depthCIImage, from: depthCIImage.extent) else { return }
+                    let depthUIImage = UIImage(cgImage: depthCGImage)
+                    depthImage = Image(uiImage: depthUIImage)
+                    depthSize = CGSize(width: CVPixelBufferGetWidth(depthPixelBuffer), height: CVPixelBufferGetHeight(depthPixelBuffer))
+                }
+
+                DispatchQueue.main.async {
+                    previewCallback(CamPreview(
+                        colorImage: colorImage,
+                        colorSize: colorSize,
+                        depthImage: depthImage,
+                        depthSize: depthSize,
+                        timestamp: frame.timestamp - self.startTime,
+                        fps: fps
+                    ))
+                }
             }
-
-            previewCallback(CamPreview(
-                colorImage: colorImage,
-                colorSize: colorSize,
-                depthImage: depthImage,
-                depthSize: depthSize,
-                timestamp: frame.timestamp - startTime,
-                fps: fps
-            ))
         }
     }
 
