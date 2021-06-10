@@ -39,9 +39,6 @@ class CamRecorder: NSObject, ARSessionDelegate {
     private var lastFrameNumber: UInt64 = 0
     private var lastUpdate: TimeInterval = 0.0
 
-    // 最後にpreviewCallbackを呼んだ時刻
-    private var previewLastUpdate: TimeInterval = 0.0
-
     // カメラのプレビューを表示するときに呼ぶコールバック関数
     private var previewCallback: ((CamPreview) -> ())? = nil
     private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
@@ -201,9 +198,10 @@ class CamRecorder: NSObject, ARSessionDelegate {
             let fps = 1.0 / (frame.timestamp - self.lastUpdate)
             self.lastUpdate = frame.timestamp
 
+            let timestamp = frame.timestamp - self.startTime
+
             // 録画が開始されている場合
             if self.isRecording {
-                let timestamp = frame.timestamp - self.startTime
                 if timestamp >= 0 {
                     // フレーム番号の更新
                     let frameNumber = self.lastFrameNumber
@@ -251,54 +249,18 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 }
             }
 
-            // fps60などでプレビューするとUIがカクつくため、応急措置としてプレビューのfpsを落としている
-            // あとで原因を探る
-            if (frame.timestamp - self.previewLastUpdate) > (1.0 / 30.0) {
-                self.previewLastUpdate = frame.timestamp
-                let timestamp = frame.timestamp - self.startTime
-
-                DispatchQueue.main.async {
-                    self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
-                }
-
-                // 以下はプレビューのための処理
-                guard let previewCallback = self.previewCallback else { return }
-
-                let colorCIImage = CIImage(cvPixelBuffer: colorPixelBuffer).oriented(CGImagePropertyOrientation.right)
-                guard let colorCGImage = self.context.createCGImage(colorCIImage, from: colorCIImage.extent) else { return }
-                let colorUIImage = UIImage(cgImage: colorCGImage)
-                let colorImage = Image(uiImage: colorUIImage)
-
-                var depthImage: Image? = nil
-                var depthSize: CGSize = .zero
-                if let depthPixelBuffer = depthPixelBuffer {
-                    let depthCIImage = CIImage(cvPixelBuffer: depthPixelBuffer).oriented(CGImagePropertyOrientation.right)
-                    guard let depthCGImage = self.context.createCGImage(depthCIImage, from: depthCIImage.extent) else { return }
-                    let depthUIImage = UIImage(cgImage: depthCGImage)
-                    depthImage = Image(uiImage: depthUIImage)
-                    depthSize = CGSize(width: CVPixelBufferGetWidth(depthPixelBuffer), height: CVPixelBufferGetHeight(depthPixelBuffer))
-                }
-
-                DispatchQueue.main.async {
-                    previewCallback(CamPreview(
-                        colorImage: colorImage,
-                        colorSize: colorSize,
-                        depthImage: depthImage,
-                        depthSize: depthSize,
-                        timestamp: frame.timestamp - self.startTime,
-                        fps: fps
-                    ))
-                }
+            DispatchQueue.main.async {
+                self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
+                self.previewCallback?(CamPreview(
+                    colorImage: colorPixelBuffer,
+                    depthImage: depthPixelBuffer
+                ))
             }
         }
     }
 
     struct CamPreview {
-        let colorImage: Image
-        let colorSize: CGSize
-        let depthImage: Image?
-        let depthSize: CGSize
-        let timestamp: TimeInterval
-        let fps: Double
+        let colorImage: CVPixelBuffer
+        let depthImage: CVPixelBuffer?
     }
 }

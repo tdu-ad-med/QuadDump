@@ -9,6 +9,7 @@ struct Home: View {
         ZStack {
             // カメラのプレビュー
             CameraView(quadRecorder: quadRecorder)
+                .edgesIgnoringSafeArea(.all)
 
             // 録画時間やセンサーのフレームレートの表示
             StatusTextView(quadRecorder: quadRecorder)
@@ -20,47 +21,6 @@ struct Home: View {
             var description: String? = nil
             if case let .failure(e) = result { description = e.description }
             return Alert(title: Text("Error"), message: Text(description ?? ""), dismissButton: .default(Text("OK")))
-        }
-    }
-}
-
-struct CameraView: View {
-    let quadRecorder: QuadRecorder
-    @State private var camPreview: CamRecorder.CamPreview? = nil
-    private let normalFont = Font.custom("DIN Condensed", size: 24)
-
-    var body: some View {
-        ZStack {
-            if let camPreview = camPreview { GeometryReader(content: { geometry in ZStack {
-                // カメラをぼかした背景の表示
-                camPreview.colorImage
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: 10)
-                    .opacity(0.4)
-                    .background(Color(hex: 0x000000))
-                    .edgesIgnoringSafeArea(.all)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-
-                // カラーのプレビュー
-                VStack() {
-                    let width = geometry.size.width
-                    let previewHeight = width * camPreview.colorSize.width / camPreview.colorSize.height
-                    let top = max(geometry.size.height - previewHeight, 0) / 3
-                    camPreview.colorImage
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: width, height: previewHeight)
-                        .padding(.top, top)
-                    Spacer()
-                }
-            }})}
-            else { Text("please wait").font(normalFont) }
-        }
-        .onAppear {
-            quadRecorder.preview { camPreview in
-                self.camPreview = camPreview
-            }
         }
     }
 }
