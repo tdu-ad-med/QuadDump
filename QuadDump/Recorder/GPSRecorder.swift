@@ -65,7 +65,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
     func disable() -> SimpleResult {
         if (!isEnable) { return Err("GPSは既に終了しています") }
 
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             if self.isRecording { self.stop() }  // 録画中であれば録画を終了
         }
         locationManager.stopUpdatingLocation()
@@ -76,7 +77,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 
     // 録画開始
     func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             self.startTime = startTime
             self.systemUptime = Date(timeIntervalSinceNow: -ProcessInfo.processInfo.systemUptime)
             if case let .failure(e) = self.gpsWriter.create(url: outputDir.appendingPathComponent("gps")) {
@@ -88,7 +90,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             self.gpsWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
@@ -97,7 +100,9 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 
     // GPSが更新されたときに呼ばれるメソッド
     func locationManager(_ locationManager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
+
             for (index, location) in locations.enumerated() {
                 // システムが起動してからの時刻に変換
                 let timestamp = self.systemUptime.distance(to: location.timestamp)
@@ -132,7 +137,8 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
                 if index == (locations.count - 1) {
                     if (timestamp - self.previewLastUpdate) > (1.0 / 10.0) {
                         self.previewLastUpdate = timestamp
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self = self else { return }
                             self.timestampCallback?(self.isRecording ? preview.timestamp : 0.0, fps)
                             self.previewCallback?(preview)
                         }

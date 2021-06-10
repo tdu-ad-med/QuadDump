@@ -62,7 +62,8 @@ class IMURecorder {
     func disable() -> SimpleResult {
         if !isEnable { return Err("IMUは既に終了しています") }
 
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             if self.isRecording { self.stop() }  // 録画中であれば録画を終了
         }
         motionManager.stopDeviceMotionUpdates()
@@ -73,7 +74,8 @@ class IMURecorder {
 
     // 録画開始
     func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             self.startTime = startTime
             if case let .failure(e) = self.imuWriter.create( url: outputDir.appendingPathComponent("imu")) {
                 self.stop()
@@ -84,7 +86,8 @@ class IMURecorder {
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             self.imuWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
@@ -124,7 +127,8 @@ class IMURecorder {
         // あとで原因を探る
         if (motion.timestamp - previewLastUpdate) > (1.0 / 10.0) {
             previewLastUpdate = motion.timestamp
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.timestampCallback?(self.isRecording ? preview.timestamp : 0.0, fps)
                 self.previewCallback?(preview)
             }

@@ -88,7 +88,8 @@ class CamRecorder: NSObject, ARSessionDelegate {
     func disable() -> SimpleResult {
         if !isEnable { return Err("Cameraは既に終了しています") }
 
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
             if self.isRecording { self.stop() }  // 録画中であれば録画を終了
         }
         session.pause()
@@ -107,7 +108,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
         self.startTime = startTime
         lastFrameNumber = 0
 
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
+
             // カラーカメラの記録を開始
             if case let .failure(e) = self.colorWriter.create(
                 url: outputDir.appendingPathComponent("camera.mp4"),
@@ -145,7 +148,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
     // 録画終了
     func stop(error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
+
             self.colorWriter.finish { e in
                 DispatchQueue.main.async { error?(e) }
             }
@@ -163,7 +168,9 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
     // ARSessionからこのメソッドにカメラの映像が送られてくる
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        encodeQueue.addOperation {
+        encodeQueue.addOperation { [weak self] in
+            guard let self = self else { return }
+
             // カラーカメラの画像と解像度、ピクセルフォーマットを取得
             let colorPixelBuffer = frame.capturedImage
             let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
@@ -249,7 +256,8 @@ class CamRecorder: NSObject, ARSessionDelegate {
                 }
             }
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
                 self.previewCallback?(CamPreview(
                     color: colorPixelBuffer,
