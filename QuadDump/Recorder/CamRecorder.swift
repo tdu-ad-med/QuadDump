@@ -252,15 +252,15 @@ class CamRecorder: NSObject, ARSessionDelegate {
             DispatchQueue.main.async {
                 self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
                 self.previewCallback?(CamPreview(
-                    colorImage: colorPixelBuffer,
-                    depthImage: depthPixelBuffer
+                    color: colorPixelBuffer,
+                    depth: depthPixelBuffer
                 ))
             }
         }
     }
 
     struct CamPreview {
-        let colorImage: CVPixelBuffer
-        let depthImage: CVPixelBuffer?
+        let color: CVPixelBuffer
+        let depth: CVPixelBuffer?
     }
 }
