@@ -3,13 +3,17 @@ import MetalKit
 
 struct CameraView: UIViewRepresentable {
     let quadRecorder: QuadRecorder
-    init(quadRecorder: QuadRecorder) { self.quadRecorder = quadRecorder }
-    func makeUIView(context: Context) -> some UIView {
+    @Binding var previewMode: Bool
+
+    func makeUIView(context: Context) -> BaseCameraView {
         let view = BaseCameraView()
         view.setQuadRecorder(quadRecorder: quadRecorder)
         return view
     }
-    func updateUIView(_ uiView: UIViewType, context: Context) {}
+
+    func updateUIView(_ uiView: UIViewType, context: Context) {
+        uiView.mode = previewMode
+    }
 }
 
 class BaseCameraView: UIView {
@@ -23,11 +27,19 @@ class BaseCameraView: UIView {
     private let device = MTLCreateSystemDefaultDevice()!
     private lazy var commandQueue = device.makeCommandQueue()
     private let renderPassDescriptor = MTLRenderPassDescriptor()
-    private lazy var renderPipelineState: MTLRenderPipelineState! = {
+    private lazy var normalRenderPipelineState: MTLRenderPipelineState! = {
         guard let library = device.makeDefaultLibrary() else { return nil }
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.vertexFunction = library.makeFunction(name: "vertexShader")
-        descriptor.fragmentFunction = library.makeFunction(name: "fragmentShader")
+        descriptor.fragmentFunction = library.makeFunction(name: "normalFragmentShader")
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        return try? device.makeRenderPipelineState(descriptor: descriptor)
+    }()
+    private lazy var colorfulRenderPipelineState: MTLRenderPipelineState! = {
+        guard let library = device.makeDefaultLibrary() else { return nil }
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.vertexFunction = library.makeFunction(name: "vertexShader")
+        descriptor.fragmentFunction = library.makeFunction(name: "colorfulFragmentShader")
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         return try? device.makeRenderPipelineState(descriptor: descriptor)
     }()
@@ -36,6 +48,7 @@ class BaseCameraView: UIView {
         CVMetalTextureCacheCreate(nil, nil, device, nil, &cache)
         return cache
     }()
+    public var mode: Bool = false
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -73,7 +86,12 @@ class BaseCameraView: UIView {
 
         renderPassDescriptor.colorAttachments[0].texture = drawable.texture
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-        encoder.setRenderPipelineState(renderPipelineState)
+        if nil != depthTexture && mode {
+            encoder.setRenderPipelineState(colorfulRenderPipelineState)
+        }
+        else {
+            encoder.setRenderPipelineState(normalRenderPipelineState)
+        }
 
         let aspect = Float(frame.width / frame.height) * Float(width) / Float(height)
         let vertexData: [[Float]] = [

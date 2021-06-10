@@ -3,13 +3,13 @@ import SwiftUI
 struct Home: View {
     @State private var errorAlert = false
     @State private var result: SimpleResult = Ok()
+    @State private var previewMode: Bool = false
     let quadRecorder = QuadRecorder()
 
     var body: some View {
         ZStack {
             // カメラのプレビュー
-            CameraView(quadRecorder: quadRecorder)
-                .edgesIgnoringSafeArea(.all)
+            CameraViewSub(quadRecorder: quadRecorder)
 
             // 録画時間やセンサーのフレームレートの表示
             StatusTextView(quadRecorder: quadRecorder)
@@ -21,6 +21,35 @@ struct Home: View {
             var description: String? = nil
             if case let .failure(e) = result { description = e.description }
             return Alert(title: Text("Error"), message: Text(description ?? ""), dismissButton: .default(Text("OK")))
+        }
+    }
+}
+
+struct CameraViewSub: View {
+    let quadRecorder: QuadRecorder
+    @State private var previewMode: Bool = false
+
+    var body: some View {
+        ZStack {
+            GeometryReader(content: { geometry in ZStack {
+                // カラーのプレビュー
+                VStack() {
+                    let width = geometry.size.width
+                    let previewHeight = width * 16 / 12
+                    let top = max(geometry.size.height - previewHeight, 0) / 3
+                    CameraView(quadRecorder: quadRecorder, previewMode: $previewMode)
+                        .frame(width: width, height: previewHeight)
+                        .padding(.top, top)
+                        // タップイベントの処理
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                                .onEnded { value in
+                                    previewMode = !previewMode
+                                }
+                        )
+                    Spacer()
+                }
+            }})
         }
     }
 }
@@ -75,7 +104,7 @@ struct StatusTextView: View {
                             .font(smallFont)
                     }.frame(width: 70, height: 40)
                 }
-                .padding(.bottom, 126)
+                .padding(.bottom, 120)
             }
             .foregroundColor(Color(hex: 0xfeffff))
             .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)

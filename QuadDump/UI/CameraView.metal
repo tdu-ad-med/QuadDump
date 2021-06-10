@@ -40,7 +40,18 @@ vertexShader(uint vertexID [[ vertex_id ]],
 }
 
 fragment float4
-fragmentShader(RasterizerData in [[ stage_in ]],
+normalFragmentShader(RasterizerData in [[ stage_in ]],
+               texture2d<float, access::sample> colorTextureY [[ texture(0) ]],
+               texture2d<float, access::sample> colorTextureCbCr [[ texture(1) ]])
+{
+    constexpr sampler sampler2d(mip_filter::linear, mag_filter::linear, min_filter::linear);
+    const float4 ycbcr = float4(colorTextureY.sample(sampler2d, in.texCoord).r, colorTextureCbCr.sample(sampler2d, in.texCoord).rg, 1);
+    const float3 color = (yCbCrToRGB * ycbcr).rgb;
+    return float4(color, 1.0);
+}
+
+fragment float4
+colorfulFragmentShader(RasterizerData in [[ stage_in ]],
                texture2d<float, access::sample> colorTextureY [[ texture(0) ]],
                texture2d<float, access::sample> colorTextureCbCr [[ texture(1) ]],
                texture2d<float, access::sample> depthTexture [[texture(2)]])
