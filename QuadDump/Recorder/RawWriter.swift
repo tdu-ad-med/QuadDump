@@ -62,4 +62,9 @@ class RawWriter {
         }
         else { errorCallback?("録画が開始されていません") }
     }
+
+    func offset() -> UInt64 {
+        guard let fileHandle = fileHandle else { return 0 }
+        return (try? fileHandle.offset()) ?? 0
+    }
 }

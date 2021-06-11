@@ -68,6 +68,7 @@ with open("../cameraFrameInfo", "rb") as f:
             "frameNumber"      : np.frombuffer(f.read(8*1), dtype=np.uint64, count=1)[0],
             "timestamp"        : np.frombuffer(f.read(8*1), dtype=np.float64, count=1)[0],
             "exists"           : np.frombuffer(f.read(1*3), dtype=np.uint8, count=3),
+            "offset"           : np.frombuffer(f.read(8*2), dtype=np.uint64, count=2),
             "intrinsics"       : np.frombuffer(f.read(4*3*3), dtype=np.float32, count=3*3).reshape(3, 3).copy(),
             "projectionMatrix" : np.frombuffer(f.read(4*4*4), dtype=np.float32, count=4*4).reshape(4, 4).copy(),
             "viewMatrix"       : np.frombuffer(f.read(4*4*4), dtype=np.float32, count=4*4).reshape(4, 4).copy()
@@ -94,12 +95,14 @@ for frame in positions:
             ret, color = video.read()
 
         if frame["exists"][1] == 1:
+            depth_data.seek(frame["offset"][0])
             zlib_size = np.frombuffer(depth_data.read(8*1), dtype=np.uint64, count=1)[0]
             depth = depth_data.read(zlib_size)
             depth = zlib.decompress(depth, -15)
             depth = np.frombuffer(depth, np.float32).reshape(depth_height, depth_width).copy()
 
         if frame["exists"][2] == 1:
+            confidence_data.seek(frame["offset"][1])
             zlib_size = np.frombuffer(confidence_data.read(8*1), dtype=np.uint64, count=1)[0]
             confidence = confidence_data.read(zlib_size)
             confidence = zlib.decompress(confidence, -15)

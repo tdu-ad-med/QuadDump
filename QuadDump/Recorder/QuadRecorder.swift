@@ -96,7 +96,7 @@ class QuadRecorder {
                     "format": "{uint64(zlibSize),zlib(uint8[height][width])}[frame]"
                 ],
                 "cameraFrameInfo": [
-                    "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),uint8(isDepthFrameExist),uint8(isConfidenceFrameExist),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
+                    "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),uint8(isDepthFrameExist),uint8(isConfidenceFrameExist),uint64(depthOffset),uint64(confidenceOffset),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
                 ],
                 "imu": [
                     "format": "raw,{double(timestampe),double3(accleration),double3(attitude)}[frame]"

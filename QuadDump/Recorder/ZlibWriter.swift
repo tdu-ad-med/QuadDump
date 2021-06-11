@@ -64,4 +64,8 @@ class ZlibWriter {
     func finish(errorCallback: ((String) -> ())? = nil) {
         return writer.finish(errorCallback: errorCallback)
     }
+
+    func offset() -> UInt64 {
+        return writer.offset()
+    }
 }

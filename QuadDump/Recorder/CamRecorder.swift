@@ -219,13 +219,17 @@ class CamRecorder: NSObject, ARSessionDelegate {
 
                     // デプスカメラの画像を追加
                     var isDepthFrameExist: UInt8 = 0
+                    var depthOffset: UInt64 = 0
                     if let depthPixelBuffer = depthPixelBuffer {
+                        depthOffset = self.depthWriter.offset()
                         isDepthFrameExist = self.depthWriter.append(pixelBuffer: depthPixelBuffer).isSuccess ? 1 : 0
                     }
 
                     // デプスの信頼度マップの画像を追加
                     var isConfidenceFrameExist: UInt8 = 0
+                    var confidenceOffset: UInt64 = 0
                     if let confidencePixelBuffer = confidencePixelBuffer {
+                        confidenceOffset = self.confidenceWriter.offset()
                         isConfidenceFrameExist = self.confidenceWriter.append(pixelBuffer: confidencePixelBuffer).isSuccess ? 1 : 0
                     }
 
@@ -234,6 +238,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
                     frameInfomation.append(contentsOf: [frameNumber])
                     frameInfomation.append(contentsOf: [timestamp])
                     frameInfomation.append(contentsOf: [isColorFrameExist, isDepthFrameExist, isConfidenceFrameExist])
+                    frameInfomation.append(contentsOf: [depthOffset, confidenceOffset])
                     frameInfomation.append(contentsOf: [
                         // ARFrame.camera.intrinsics
                         intr[0, 0], intr[1, 0], intr[2, 0],
