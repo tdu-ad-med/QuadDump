@@ -59,9 +59,16 @@ struct StatusTextView: View {
     @State private var camTime: (TimeInterval, Double) = (0.0, 0.0)
     @State private var imuTime: (TimeInterval, Double) = (0.0, 0.0)
     @State private var gpsTime: (TimeInterval, Double) = (0.0, 0.0)
+    @State private var firstAnim: Bool = true
     private let timerFont = Font.custom("DIN Condensed", size: 48)
     private let normalFont = Font.custom("DIN Condensed", size: 24)
     private let smallFont = Font.custom("DIN Condensed", size: 16)
+
+    // バネマスダンパー系で臨界減衰となるようなアニメーションの作成
+    //   臨界減衰となる条件: damping = sqrt(stiffness) * 2
+    private var buttonAnimation: Animation {
+        Animation.interpolatingSpring(mass: 1.0, stiffness: 100, damping: sqrt(60) * 2)
+    }
 
     var body: some View {
         ZStack {
@@ -71,7 +78,7 @@ struct StatusTextView: View {
                     .font(timerFont)
                     .foregroundColor(Color(hex: 0xfeffff))
                     .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)
-                    .padding(.top, 40)
+                    .padding(.top, firstAnim ? -60 : 40)
                 Spacer()
             }
 
@@ -86,7 +93,9 @@ struct StatusTextView: View {
                             .font(normalFont)
                         Text(camTime.0.hhmmss)
                             .font(smallFont)
-                    }.frame(width: 70, height: 40)
+                    }
+                    .frame(width: firstAnim ? 120 : 70, height: 40)
+                    .rotationEffect(Angle(degrees: firstAnim ? 10.0 : 0.0))
                     VStack {
                         Text("IMU")
                             .font(smallFont)
@@ -94,7 +103,8 @@ struct StatusTextView: View {
                             .font(normalFont)
                         Text(imuTime.0.hhmmss)
                             .font(smallFont)
-                    }.frame(width: 70, height: 40)
+                    }
+                    .frame(width: firstAnim ? 120 : 70, height: 40)
                     VStack {
                         Text("GPS")
                             .font(smallFont)
@@ -102,9 +112,11 @@ struct StatusTextView: View {
                             .font(normalFont)
                         Text(gpsTime.0.hhmmss)
                             .font(smallFont)
-                    }.frame(width: 70, height: 40)
+                    }
+                    .frame(width: firstAnim ? 120 : 70, height: 40)
+                    .rotationEffect(Angle(degrees: firstAnim ? -10.0 : 0.0))
                 }
-                .padding(.bottom, 120)
+                .padding(.bottom, firstAnim ? -80 : 120)
             }
             .foregroundColor(Color(hex: 0xfeffff))
             .shadow(color: Color(hex: 0x000000, alpha: 0.4), radius: 6)
@@ -119,7 +131,12 @@ struct StatusTextView: View {
             quadRecorder.timestamp(gps: { (time, fps) in
                 self.gpsTime = (time, fps)
             })
+            firstAnim = false
         }
+        .onDisappear {
+            firstAnim = true
+        }
+        .animation(buttonAnimation, value: firstAnim)
     }
 }
 
@@ -128,6 +145,13 @@ struct ButtonsView: View {
     @Binding var errorAlert: Bool
     @Binding var result: SimpleResult
     @State private var isRecording: Bool = false
+    @State private var firstAnim: Bool = true
+
+    // バネマスダンパー系で臨界減衰となるようなアニメーションの作成
+    //   臨界減衰となる条件: damping = sqrt(stiffness) * 2
+    private var buttonAnimation: Animation {
+        Animation.interpolatingSpring(mass: 1.0, stiffness: 100, damping: sqrt(60) * 2)
+    }
 
     var body: some View {
         ZStack {
@@ -151,7 +175,7 @@ struct ButtonsView: View {
                         }
                     }
                 )
-                .padding(.bottom, 16)
+                .padding(.bottom, firstAnim ? -80 : 16)
             }
 
             // 録画一覧に飛ぶボタンの表示
@@ -164,7 +188,7 @@ struct ButtonsView: View {
                         .padding(.leading, 20)
                     Spacer()
                 }
-                .padding(.bottom, 27)
+                .padding(.bottom, firstAnim ? -80 : 27)
             }
         }
         .onAppear {
@@ -176,6 +200,8 @@ struct ButtonsView: View {
                 isRecording = false
                 return
             }
+
+            firstAnim = false
         }
         .onDisappear {
             result = quadRecorder.disable()
@@ -186,6 +212,9 @@ struct ButtonsView: View {
                 isRecording = false
                 return
             }
+
+            firstAnim = true
         }
+        .animation(buttonAnimation, value: firstAnim)
     }
 }
