@@ -104,7 +104,8 @@ class IMURecorder {
 
         // プレビュー用のデータ作成
         let preview = IMUPreview(
-            acceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
+            gravity: (motion.gravity.x, motion.gravity.y, motion.gravity.z),
+            userAcceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
             attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
             timestamp: motion.timestamp - startTime,
             fps: fps
@@ -114,9 +115,12 @@ class IMURecorder {
         if isRecording {
             let _ = imuWriter.append(data: [
                 preview.timestamp,
-                preview.acceleration.0,
-                preview.acceleration.1,
-                preview.acceleration.2,
+                preview.gravity.0,
+                preview.gravity.1,
+                preview.gravity.2,
+                preview.userAcceleration.0,
+                preview.userAcceleration.1,
+                preview.userAcceleration.2,
                 preview.attitude.0,
                 preview.attitude.1,
                 preview.attitude.2
@@ -136,7 +140,8 @@ class IMURecorder {
     }
 
     struct IMUPreview {
-        let acceleration: (Double, Double, Double)
+        let gravity: (Double, Double, Double)
+        let userAcceleration: (Double, Double, Double)
         let attitude: (Double, Double, Double)
         let timestamp: TimeInterval
         let fps: Double

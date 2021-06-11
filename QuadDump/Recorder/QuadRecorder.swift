@@ -99,7 +99,7 @@ class QuadRecorder {
                     "format": "raw,{uint64(frameNumber),double(timestampe),uint8(isColorFrameExist),uint8(isDepthFrameExist),uint8(isConfidenceFrameExist),uint64(depthOffset),uint64(confidenceOffset),float3x3(intrinsics),float4x4(projectionMatrix),float4x4(viewMatrix)}[frame]"
                 ],
                 "imu": [
-                    "format": "raw,{double(timestampe),double3(accleration),double3(attitude)}[frame]"
+                    "format": "raw,{double(timestampe),double3(gravity),double3(userAccleration),double3(attitude)}[frame]"
                 ],
                 "gps": [
                     "format": "raw,{double(timestampe),double(latitude),double(longitude),double(altitude),double(horizontalAccuracy),double(verticalAccuracy)}[frame]"
