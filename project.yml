@@ -5,8 +5,15 @@ settings:
   PRODUCT_BUNDLE_IDENTIFIER: wakewakame.iOSplayground
   CODE_SIGN_STYLE: Automatic
 
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    version: 5.8.0
+
 targets:
   QuadDump:
     sources: QuadDump
     platform: iOS
     type: application
+    dependencies:
+      - package: GRDB
