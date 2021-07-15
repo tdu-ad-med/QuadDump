@@ -17,3 +17,9 @@ targets:
     type: application
     dependencies:
       - package: GRDB
+
+schemes:
+  QuadDump:
+    build:
+      targets:
+        QuadDump: all
