@@ -1,279 +1,269 @@
 import ARKit
 import SwiftUI
+import GRDB
 
 class CamRecorder: NSObject, ARSessionDelegate {
-    // カラーカメラとデプスカメラにアクセスするためのクラス
-    private let session = ARSession()
-    private let configuration = ARWorldTrackingConfiguration()
+	// カラーカメラとデプスカメラにアクセスするためのクラス
+	private let session = ARSession()
+	private let configuration = ARWorldTrackingConfiguration()
 
-    private let encodeQueue: OperationQueue = {
-        // 2つ以上のスレッドから同時にファイルへ書き込まれるとよくないので
-        // OperationQueueの並列化はしない
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
-        return queue
-    }()
+	private let encodeQueue: OperationQueue = {
+		// 2つ以上のスレッドから同時にファイルへ書き込まれるとよくないので
+		// OperationQueueの並列化はしない
+		let queue = OperationQueue()
+		queue.maxConcurrentOperationCount = 1
+		return queue
+	}()
 
-    // カメラへのアクセスが開始されているか
-    public private(set) var isEnable: Bool = false
+	// カメラへのアクセスが開始されているか
+	public private(set) var isEnable: Bool = false
 
-    // 動画を書き込むクラス
-    private let colorWriter = MP4Writer()  // カラーカメラ
-    private let depthWriter = ZlibWriter()  // デプスカメラ
-    private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
-    private let frameInfomationWriter = RawWriter()  // カメラ座標
-    private var isRecording: Bool {
-        colorWriter.isRecording && depthWriter.isRecording &&
-        confidenceWriter.isRecording && frameInfomationWriter.isRecording
-    }
+	// 動画を書き込むクラス
+	private let colorWriter = MP4Writer()  // カラーカメラ
+	private let depthWriter = ZlibWriter()  // デプスカメラ
+	private let confidenceWriter = ZlibWriter()  // デプスカメラの信頼度マップ
+	private var isRecording: Bool { colorWriter.isRecording }
 
-    // カメラの解像度とピクセルフォーマット (width, height, pixelFormat)
-    public private(set) var colorCamInfo: (Int, Int, OSType)? = nil
-    public private(set) var depthCamInfo: (Int, Int, OSType)? = nil
-    public private(set) var confidenceCamInfo: (Int, Int, OSType)? = nil
+	// カメラの解像度とピクセルフォーマット (width, height, pixelFormat)
+	public private(set) var colorCamInfo: (Int, Int, OSType)? = nil
+	public private(set) var depthCamInfo: (Int, Int, OSType)? = nil
+	public private(set) var confidenceCamInfo: (Int, Int, OSType)? = nil
 
-    // 録画開始時刻
-    private var startTime: TimeInterval = ProcessInfo.processInfo.systemUptime
+	// 録画に関する情報を設定
+	private var info: QuadRecorder.Info?
 
-    // カメラから最後にデータを取得したフレーム番号、時刻
-    private var lastFrameNumber: UInt64 = 0
-    private var lastUpdate: TimeInterval = 0.0
+	// カメラから最後にデータを取得した時刻
+	private var lastUpdate: TimeInterval = 0.0
 
-    // カメラのプレビューを表示するときに呼ぶコールバック関数
-    private var previewCallback: ((CamPreview) -> ())? = nil
-    private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
+	// カメラのプレビューを表示するときに呼ぶコールバック関数
+	private var previewCallback: ((CamPreview) -> ())? = nil
+	private var timestampCallback: ((TimeInterval, Double) -> ())? = nil
 
-    // カメラの画像をImageへ変換するために使用するCIContext
-    private let context = CIContext(mtlDevice: MTLCreateSystemDefaultDevice()!, options: nil)
+	// カメラの画像をImageへ変換するために使用するCIContext
+	private let context = CIContext(mtlDevice: MTLCreateSystemDefaultDevice()!, options: nil)
 
-    override init() {
-        super.init()
+	override init() {
+		super.init()
 
-        // delegateを設定
-        session.delegate = self
-        session.delegateQueue = DispatchQueue.main
+		// delegateを設定
+		session.delegate = self
+		session.delegateQueue = DispatchQueue.main
 
-        // オートフォーカスを無効にする
-        //configuration.isAutoFocusEnabled = false
+		// オートフォーカスを無効にする
+		//configuration.isAutoFocusEnabled = false
 
-        // LiDARセンサーを搭載している場合はデプスを取得する
-        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
-            configuration.frameSemantics = .sceneDepth
-        }
-    }
+		// LiDARセンサーを搭載している場合はデプスを取得する
+		if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+			configuration.frameSemantics = .sceneDepth
+		}
+	}
 
-    deinit {
-        if isEnable { let _ = disable() }
-    }
+	deinit {
+		if isEnable { let _ = disable() }
+	}
 
-    // プレビュー画像を受け取るコールバック関数の登録
-    func preview(_ preview: ((CamPreview) -> ())?) {
-        previewCallback = preview
-    }
-    func timestamp(_ timestamp: ((TimeInterval, Double) -> ())?) {
-        timestampCallback = timestamp
-    }
+	// プレビュー画像を受け取るコールバック関数の登録
+	func preview(_ preview: ((CamPreview) -> ())?) {
+		previewCallback = preview
+	}
+	func timestamp(_ timestamp: ((TimeInterval, Double) -> ())?) {
+		timestampCallback = timestamp
+	}
 
-    // カメラへのアクセスを開始
-    func enable() -> SimpleResult {
-        if isEnable { return Err("Cameraは既に開始しています") }
+	// カメラへのアクセスを開始
+	func enable() -> SimpleResult {
+		if isEnable { return Err("Cameraは既に開始しています") }
 
-        session.run(configuration)
-        isEnable = true
+		session.run(configuration)
+		isEnable = true
 
-        return Ok()
-    }
+		return Ok()
+	}
 
-    // カメラへのアクセスを停止
-    func disable() -> SimpleResult {
-        if !isEnable { return Err("Cameraは既に終了しています") }
+	// カメラへのアクセスを停止
+	func disable() -> SimpleResult {
+		if !isEnable { return Err("Cameraは既に終了しています") }
 
-        encodeQueue.addOperation { [weak self] in
-            guard let self = self else { return }
-            if self.isRecording { self.stop() }  // 録画中であれば録画を終了
-        }
-        session.pause()
-        isEnable = false
+		encodeQueue.addOperation { [weak self] in
+			guard let self = self else { return }
+			if self.isRecording { self.stop() }  // 録画中であれば録画を終了
+		}
+		session.pause()
+		isEnable = false
 
-        return Ok()
-    }
+		return Ok()
+	}
 
-    // 録画開始
-    func start(_ outputDir: URL, _ startTime: TimeInterval, error: ((String) -> ())? = nil) {
-        guard let info = colorCamInfo else {
-            error?("カメラの解像度を取得できませんでした")
-            return
-        }
+	// 録画開始
+	func start(_ info: QuadRecorder.Info, error: ((String) -> ())? = nil) {
+		encodeQueue.addOperation { [weak self] in
+			guard let self = self else { return }
 
-        self.startTime = startTime
-        lastFrameNumber = 0
+			guard let camInfo = self.colorCamInfo else {
+				self.stop()
+				DispatchQueue.main.async { error?("カメラの解像度を取得できませんでした") }
+				return
+			}
 
-        encodeQueue.addOperation { [weak self] in
-            guard let self = self else { return }
+			self.info = info
 
-            // カラーカメラの記録を開始
-            if case let .failure(e) = self.colorWriter.create(
-                url: outputDir.appendingPathComponent("camera.mp4"),
-                width: info.0, height: info.1, pixelFormat: info.2
-            ) {
-                self.stop()
-                DispatchQueue.main.async { error?(e.description) }
-            }
+			// テーブルの作成
+			guard let _ = ( try? info.dbQueue.write { db in
+				try db.create(table: "camera") { t in
+					t.autoIncrementedPrimaryKey("id")
+					t.column("timestamp"            , .double ).notNull()
+					t.column("color_frame"          , .integer).unique()
+					t.column("depth_zlib"           , .blob   )
+					t.column("confidence_zlib"      , .blob   )
+					t.column("intrinsics_matrix_3x3", .blob   )
+					t.column("projection_matrix_4x4", .blob   )
+					t.column("view_matrix_4x4"      , .blob   )
+				}
+			} )
+			else {
+				self.stop()
+				DispatchQueue.main.async { error?("cameraテーブルの作成に失敗しました") }
+				return
+			}
 
-            // デプスカメラの記録を開始
-            if case let .failure(e) = self.depthWriter.create(
-                url: outputDir.appendingPathComponent("depth")
-            ) {
-                self.stop()
-                DispatchQueue.main.async { error?(e.description) }
-            }
+			// カラーカメラの記録を開始
+			if case let .failure(e) = self.colorWriter.create(
+				url: info.outputDir.appendingPathComponent("camera.mp4"),
+				width: camInfo.0, height: camInfo.1, pixelFormat: camInfo.2
+			) {
+				self.stop()
+				DispatchQueue.main.async { error?(e.description) }
+			}
+		}
+	}
 
-            // デプスの信頼度の記録を開始
-            if case let .failure(e) = self.confidenceWriter.create(
-                url: outputDir.appendingPathComponent("confidence")
-            ) {
-                self.stop()
-                DispatchQueue.main.async { error?(e.description) }
-            }
+	// 録画終了
+	func stop(error: ((String) -> ())? = nil) {
+		encodeQueue.addOperation { [weak self] in
+			guard let self = self else { return }
+			self.info = nil
+			self.colorWriter.finish { e in
+				DispatchQueue.main.async { error?(e) }
+			}
+		}
+	}
 
-            // その他のパラメータの記録を開始
-            if case let .failure(e) = self.frameInfomationWriter.create(
-                url: outputDir.appendingPathComponent("cameraFrameInfo")
-            ) {
-                self.stop()
-                DispatchQueue.main.async { error?(e.description) }
-            }
-        }
-    }
+	// ARSessionからこのメソッドにカメラの映像が送られてくる
+	func session(_ session: ARSession, didUpdate frame: ARFrame) {
+		encodeQueue.addOperation { [weak self] in
+			guard let self = self else { return }
 
-    // 録画終了
-    func stop(error: ((String) -> ())? = nil) {
-        encodeQueue.addOperation { [weak self] in
-            guard let self = self else { return }
+			// カラーカメラの画像と解像度、ピクセルフォーマットを取得
+			let colorPixelBuffer = frame.capturedImage
+			let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
+			let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
+			let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
+			let colorSize = CGSize(width: colorWidth, height: colorHeight)
+			let colorCamInfo: (Int, Int, OSType) = (colorWidth, colorHeight, colorPixelFormat)
+			self.colorCamInfo = colorCamInfo
 
-            self.colorWriter.finish { e in
-                DispatchQueue.main.async { error?(e) }
-            }
-            self.depthWriter.finish { e in
-                DispatchQueue.main.async { error?(e) }
-            }
-            self.confidenceWriter.finish { e in
-                DispatchQueue.main.async { error?(e) }
-            }
-            self.frameInfomationWriter.finish { e in
-                DispatchQueue.main.async { error?(e) }
-            }
-        }
-    }
+			// デプスカメラの画像と信頼度マップの取得
+			let sceneDepth = frame.sceneDepth
+			let depthPixelBuffer = sceneDepth?.depthMap
+			let confidencePixelBuffer = sceneDepth?.confidenceMap
+			if let depthPixelBuffer = depthPixelBuffer { self.depthCamInfo = (
+				CVPixelBufferGetWidth(depthPixelBuffer),
+				CVPixelBufferGetHeight(depthPixelBuffer),
+				CVPixelBufferGetPixelFormatType(depthPixelBuffer)
+			) }
+			if let confidencePixelBuffer = confidencePixelBuffer { self.confidenceCamInfo = (
+				CVPixelBufferGetWidth(confidencePixelBuffer),
+				CVPixelBufferGetHeight(confidencePixelBuffer),
+				CVPixelBufferGetPixelFormatType(confidencePixelBuffer)
+			) }
 
-    // ARSessionからこのメソッドにカメラの映像が送られてくる
-    func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        encodeQueue.addOperation { [weak self] in
-            guard let self = self else { return }
+			// カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
+			let orientation = UIInterfaceOrientation.landscapeRight
+			let intr = frame.camera.intrinsics
+			let proj = frame.camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
+			let view = frame.camera.viewMatrix(for: orientation)
 
-            // カラーカメラの画像と解像度、ピクセルフォーマットを取得
-            let colorPixelBuffer = frame.capturedImage
-            let colorWidth: Int = CVPixelBufferGetWidth(colorPixelBuffer)
-            let colorHeight: Int = CVPixelBufferGetHeight(colorPixelBuffer)
-            let colorPixelFormat: OSType = CVPixelBufferGetPixelFormatType(colorPixelBuffer)
-            let colorSize = CGSize(width: colorWidth, height: colorHeight)
-            let colorCamInfo: (Int, Int, OSType) = (colorWidth, colorHeight, colorPixelFormat)
-            self.colorCamInfo = colorCamInfo
+			// フレームレートの計算
+			let fps = 1.0 / (frame.timestamp - self.lastUpdate)
+			self.lastUpdate = frame.timestamp
 
-            // デプスカメラの画像と信頼度マップの取得
-            let sceneDepth = frame.sceneDepth
-            let depthPixelBuffer = sceneDepth?.depthMap
-            let confidencePixelBuffer = sceneDepth?.confidenceMap
-            if let depthPixelBuffer = depthPixelBuffer { self.depthCamInfo = (
-                CVPixelBufferGetWidth(depthPixelBuffer),
-                CVPixelBufferGetHeight(depthPixelBuffer),
-                CVPixelBufferGetPixelFormatType(depthPixelBuffer)
-            ) }
-            if let confidencePixelBuffer = confidencePixelBuffer { self.confidenceCamInfo = (
-                CVPixelBufferGetWidth(confidencePixelBuffer),
-                CVPixelBufferGetHeight(confidencePixelBuffer),
-                CVPixelBufferGetPixelFormatType(confidencePixelBuffer)
-            ) }
+			let timestamp = frame.timestamp - (self.info?.startTime ?? 0.0)
 
-            // カメラの内部パラメータ行列、プロジェクション行列、ビュー行列を取得
-            let orientation = UIInterfaceOrientation.landscapeRight
-            let intr = frame.camera.intrinsics
-            let proj = frame.camera.projectionMatrix(for: orientation, viewportSize: colorSize, zNear: 0.001, zFar: 0)
-            let view = frame.camera.viewMatrix(for: orientation)
+			// 録画が開始されている場合
+			if self.isRecording {
+				if timestamp >= 0 {
+					// カラーカメラの画像を追加
+					let _ = self.colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp)
 
-            // フレームレートの計算
-            let fps = 1.0 / (frame.timestamp - self.lastUpdate)
-            self.lastUpdate = frame.timestamp
+					// デプスと信頼度マップの画像をzlibへ変換
+					var depth_zlib: Data? = nil
+					if let depthPixelBuffer = depthPixelBuffer {
+						depth_zlib = self.depthWriter.convert(pixelBuffer: depthPixelBuffer)
+					}
+					var confidence_zlib: Data? = nil
+					if let confidencePixelBuffer = confidencePixelBuffer {
+						confidence_zlib = self.confidenceWriter.convert(pixelBuffer: confidencePixelBuffer)
+					}
 
-            let timestamp = frame.timestamp - self.startTime
+					let _ = ( try? self.info?.dbQueue.write { db in
+						try Camera(
+							id: nil,
+							timestamp: timestamp,
+							color_frame: self.colorWriter.lastFrameNumber,
+							depth_zlib: depth_zlib,
+							confidence_zlib: confidence_zlib,
+							intrinsics_matrix_3x3: Data([
+								intr[0, 0], intr[1, 0], intr[2, 0],
+								intr[0, 1], intr[1, 1], intr[2, 1],
+								intr[0, 2], intr[1, 2], intr[2, 2]
+							]),
+							projection_matrix_4x4: Data([
+								proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
+								proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
+								proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
+								proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3]
+							]),
+							view_matrix_4x4: Data([
+								view[0, 0], view[1, 0], view[2, 0], view[3, 0],
+								view[0, 1], view[1, 1], view[2, 1], view[3, 1],
+								view[0, 2], view[1, 2], view[2, 2], view[3, 2],
+								view[0, 3], view[1, 3], view[2, 3], view[3, 3]
+							])
+						).insert(db)
+					} )
+				}
+			}
 
-            // 録画が開始されている場合
-            if self.isRecording {
-                if timestamp >= 0 {
-                    // フレーム番号の更新
-                    let frameNumber = self.lastFrameNumber
-                    self.lastFrameNumber += 1
+			DispatchQueue.main.async { [weak self] in
+				guard let self = self else { return }
+				self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
+				self.previewCallback?(CamPreview(
+					color: colorPixelBuffer,
+					depth: depthPixelBuffer
+				))
+			}
+		}
+	}
 
-                    // カラーカメラの画像を追加
-                    let isColorFrameExist: UInt8 = self.colorWriter.append(pixelBuffer: colorPixelBuffer, timestamp: timestamp).isSuccess ? 1 : 0
+	struct CamPreview {
+		let color: CVPixelBuffer
+		let depth: CVPixelBuffer?
+	}
+	struct Camera: Codable, FetchableRecord, PersistableRecord {
+		let id                   : Int64?
+		let timestamp            : Double
+		let color_frame          : Int64?
+		let depth_zlib           : Data?
+		let confidence_zlib      : Data?
+		let intrinsics_matrix_3x3: Data?
+		let projection_matrix_4x4: Data?
+		let view_matrix_4x4      : Data?
+	}
+}
 
-                    // デプスカメラの画像を追加
-                    var isDepthFrameExist: UInt8 = 0
-                    var depthOffset: UInt64 = 0
-                    if let depthPixelBuffer = depthPixelBuffer {
-                        depthOffset = self.depthWriter.offset()
-                        isDepthFrameExist = self.depthWriter.append(pixelBuffer: depthPixelBuffer).isSuccess ? 1 : 0
-                    }
-
-                    // デプスの信頼度マップの画像を追加
-                    var isConfidenceFrameExist: UInt8 = 0
-                    var confidenceOffset: UInt64 = 0
-                    if let confidencePixelBuffer = confidencePixelBuffer {
-                        confidenceOffset = self.confidenceWriter.offset()
-                        isConfidenceFrameExist = self.confidenceWriter.append(pixelBuffer: confidencePixelBuffer).isSuccess ? 1 : 0
-                    }
-
-                    // カメラ座標の追加
-                    var frameInfomation = Data()
-                    frameInfomation.append(contentsOf: [frameNumber])
-                    frameInfomation.append(contentsOf: [timestamp])
-                    frameInfomation.append(contentsOf: [isColorFrameExist, isDepthFrameExist, isConfidenceFrameExist])
-                    frameInfomation.append(contentsOf: [depthOffset, confidenceOffset])
-                    frameInfomation.append(contentsOf: [
-                        // ARFrame.camera.intrinsics
-                        intr[0, 0], intr[1, 0], intr[2, 0],
-                        intr[0, 1], intr[1, 1], intr[2, 1],
-                        intr[0, 2], intr[1, 2], intr[2, 2],
-
-                        // ARFrame.camera.projectionMatrix
-                        proj[0, 0], proj[1, 0], proj[2, 0], proj[3, 0],
-                        proj[0, 1], proj[1, 1], proj[2, 1], proj[3, 1],
-                        proj[0, 2], proj[1, 2], proj[2, 2], proj[3, 2],
-                        proj[0, 3], proj[1, 3], proj[2, 3], proj[3, 3],
-
-                        // ARFrame.camera.viewMatrix
-                        view[0, 0], view[1, 0], view[2, 0], view[3, 0],
-                        view[0, 1], view[1, 1], view[2, 1], view[3, 1],
-                        view[0, 2], view[1, 2], view[2, 2], view[3, 2],
-                        view[0, 3], view[1, 3], view[2, 3], view[3, 3]
-                    ])
-                    let _ = self.frameInfomationWriter.append(data: frameInfomation)
-                }
-            }
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.timestampCallback?(self.isRecording ? timestamp : 0.0, fps)
-                self.previewCallback?(CamPreview(
-                    color: colorPixelBuffer,
-                    depth: depthPixelBuffer
-                ))
-            }
-        }
-    }
-
-    struct CamPreview {
-        let color: CVPixelBuffer
-        let depth: CVPixelBuffer?
-    }
+extension Data {
+	init(_ contentsOf: [Float]) {
+		let buffer = contentsOf.withUnsafeBytes { body in body.bindMemory(to: UInt8.self) }
+		self.init(buffer)
+	}
 }

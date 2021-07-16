@@ -82,22 +82,22 @@ class QuadRecorder {
 		// 映像の情報を記録
 		guard let _ = ( try? dbQueue.write { db in
 			struct Description: Codable, FetchableRecord, PersistableRecord {
-				var date: Date
-				var color_width : Int
-				var color_height: Int
-				var depth_width : Int?
-				var depth_height: Int?
-				var confidence_width : Int?
-				var confidence_height: Int?
+				let date: Date
+				let color_width : Int
+				let color_height: Int
+				let depth_width : Int?
+				let depth_height: Int?
+				let confidence_width : Int?
+				let confidence_height: Int?
 			}
 			try db.create(table: "description") { t in
-				t.column("date", .datetime).notNull()
-				t.column("color_width" , .integer).notNull()
-				t.column("color_height", .integer).notNull()
-				t.column("depth_width" , .integer)
-				t.column("depth_height", .integer)
-				t.column("confidence_width" , .integer)
-				t.column("confidence_height", .integer)
+				t.column("date"             , .datetime).notNull()
+				t.column("color_width"      , .integer ).notNull()
+				t.column("color_height"     , .integer ).notNull()
+				t.column("depth_width"      , .integer )
+				t.column("depth_height"     , .integer )
+				t.column("confidence_width" , .integer )
+				t.column("confidence_height", .integer )
 			}
 			try Description(
 				date: startDate,
@@ -109,20 +109,20 @@ class QuadRecorder {
 				confidence_height: camRecorder.confidenceCamInfo?.1
 			).insert(db)
 		} )
-		else { error?("データベースの書き込みに失敗しました"); return }
+		else { error?("descriptionテーブルの作成に失敗しました"); return }
 
 		// 録画に関する情報を設定
 		let info = Info(
 			startDate: startDate,
 			startTime: startTime,
 			outputDir: outputDir,
-            dbQueue  : dbQueue
+			dbQueue  : dbQueue
 		)
 
 		// 各センサーの録画開始
-		camRecorder.start(outputDir, info.startTime) { e in error?(e) }
-		imuRecorder.start(outputDir, info.startTime) { e in error?(e) }
-		gpsRecorder.start(outputDir, info.startTime) { e in error?(e) }
+		camRecorder.start(info) { e in error?(e) }
+		imuRecorder.start(info) { e in error?(e) }
+		gpsRecorder.start(info) { e in error?(e) }
 
 		status = .recording(info)
 	}
@@ -130,7 +130,7 @@ class QuadRecorder {
 	// 録画終了
 	func stop(error: ((String) -> ())? = nil) {
 		if case .disable = status { error?("センサーへアクセスしていません") }
-		if case .idol	= status { error?("録画は既に終了しています") }
+		if case .idol    = status { error?("録画は既に終了しています") }
 
 		// 各センサーの録画終了
 		camRecorder.stop { e in error?(e) }
@@ -142,16 +142,16 @@ class QuadRecorder {
 
 	// 録画に関する情報
 	struct Info {
-		let startDate: Date		      // 録画開始時刻(日時)
+		let startDate: Date           // 録画開始時刻(日時)
 		let startTime: TimeInterval   // 録画開始時刻(デバイスを起動してからのTimeInterval)
-		let outputDir: URL		      // 保存先ディレクトリ
-        let dbQueue  : DatabaseQueue  // 保存先データベース
+		let outputDir: URL            // 保存先ディレクトリ
+		let dbQueue  : DatabaseQueue  // 保存先データベース
 	}
 
 	// 録画状態
 	enum Status {
-		case disable		  // センサーにアクセスしていない状態
-		case idol			 // 録画していない状態
+		case disable          // センサーにアクセスしていない状態
+		case idol             // 録画していない状態
 		case recording(Info)  // 録画中
 	}
 }
