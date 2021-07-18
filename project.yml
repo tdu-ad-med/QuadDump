@@ -1,10 +1,5 @@
 name: QuadDump
 
-settings:
-  DEVELOPMENT_TEAM: 67762NVFY8
-  PRODUCT_BUNDLE_IDENTIFIER: wakewakame.iOSplayground
-  CODE_SIGN_STYLE: Automatic
-
 packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift.git
@@ -17,9 +12,16 @@ targets:
     type: application
     dependencies:
       - package: GRDB
-
-schemes:
-  QuadDump:
-    build:
-      targets:
-        QuadDump: all
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "wakewakame.QuadDump"
+        CODE_SIGN_STYLE: Manual
+      configs:
+        debug:
+          CODE_SIGN_IDENTITY: iPhone Developer
+          PROVISIONING_PROFILE_SPECIFIER: QuadDumpProvisioningProfileDebug
+          DEVELOPMENT_TEAM: 67762NVFY8
+        release:
+          CODE_SIGN_IDENTITY: iPhone Distribution
+          PROVISIONING_PROFILE_SPECIFIER: QuadDumpProvisioningProfile
+          DEVELOPMENT_TEAM: 67762NVFY8
