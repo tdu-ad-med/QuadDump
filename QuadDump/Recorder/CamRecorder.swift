@@ -110,7 +110,7 @@ class CamRecorder: NSObject, ARSessionDelegate {
 			// テーブルの作成
 			guard let _ = ( try? info.dbQueue.write { db in
 				try db.create(table: "camera") { t in
-					t.autoIncrementedPrimaryKey("id")
+					t.autoIncrementedPrimaryKey("id").notNull()
 					t.column("timestamp"            , .double ).notNull()
 					t.column("color_frame"          , .integer).unique()
 					t.column("depth_zlib"           , .blob   )

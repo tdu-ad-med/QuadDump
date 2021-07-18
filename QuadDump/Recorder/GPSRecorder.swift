@@ -83,7 +83,7 @@ class GPSRecorder: NSObject, CLLocationManagerDelegate {
 			// テーブルの作成
 			guard let _ = ( try? self.info?.dbQueue.write { db in
 				try db.create(table: "gps") { t in
-					t.autoIncrementedPrimaryKey("id")
+					t.autoIncrementedPrimaryKey("id").notNull()
 					t.column("timestamp"          , .double).notNull()
 					t.column("latitude"           , .double).notNull()
 					t.column("longitude"          , .double).notNull()

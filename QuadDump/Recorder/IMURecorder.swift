@@ -79,7 +79,7 @@ class IMURecorder {
 			// テーブルの作成
 			guard let _ = ( try? self.info?.dbQueue.write { db in
 				try db.create(table: "imu") { t in
-					t.autoIncrementedPrimaryKey("id")
+					t.autoIncrementedPrimaryKey("id").notNull()
 					t.column("timestamp"         , .double).notNull()
 					t.column("gravity_x"         , .double).notNull()
 					t.column("gravity_y"         , .double).notNull()
