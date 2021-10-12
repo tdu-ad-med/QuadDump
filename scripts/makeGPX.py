@@ -3,6 +3,8 @@
 #
 # 使い方: python3 makeGPX.py <db.sqlite3へのパス>
 #
+# 実行するとGPXのテキストが表示されるので、これをファイルとして保存する。
+#
 
 import sys
 import os
