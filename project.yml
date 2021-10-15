@@ -3,7 +3,7 @@ name: QuadDump
 packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift.git
-    version: 5.8.0
+    version: 5.12.0
 
 targets:
   QuadDump:
