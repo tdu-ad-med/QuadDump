@@ -87,6 +87,9 @@ class IMURecorder {
 					t.column("user_accleration_x", .double).notNull()
 					t.column("user_accleration_y", .double).notNull()
 					t.column("user_accleration_z", .double).notNull()
+					t.column("rotation_rate_x"   , .double).notNull()
+					t.column("rotation_rate_y"   , .double).notNull()
+					t.column("rotation_rate_z"   , .double).notNull()
 					t.column("attitude_x"        , .double).notNull()
 					t.column("attitude_y"        , .double).notNull()
 					t.column("attitude_z"        , .double).notNull()
@@ -120,6 +123,7 @@ class IMURecorder {
 		let preview = IMUPreview(
 			gravity: (motion.gravity.x, motion.gravity.y, motion.gravity.z),
 			userAcceleration: (motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z),
+			rotationRate: (motion.rotationRate.x, motion.rotationRate.y, motion.rotationRate.z),
 			attitude: (motion.attitude.roll, motion.attitude.pitch, motion.attitude.yaw),
 			timestamp: motion.timestamp - (self.info?.startTime ?? 0.0),
 			fps: fps
@@ -136,6 +140,9 @@ class IMURecorder {
 				user_accleration_x: preview.userAcceleration.0,
 				user_accleration_y: preview.userAcceleration.1,
 				user_accleration_z: preview.userAcceleration.2,
+				rotation_rate_x   : preview.rotationRate.0,
+				rotation_rate_y   : preview.rotationRate.1,
+				rotation_rate_z   : preview.rotationRate.2,
 				attitude_x        : preview.attitude.0,
 				attitude_y        : preview.attitude.1,
 				attitude_z        : preview.attitude.2
@@ -157,6 +164,7 @@ class IMURecorder {
 	struct IMUPreview {
 		let gravity         : (Double, Double, Double)
 		let userAcceleration: (Double, Double, Double)
+		let rotationRate    : (Double, Double, Double)
 		let attitude        : (Double, Double, Double)
 		let timestamp       : TimeInterval
 		let fps             : Double
@@ -170,6 +178,9 @@ class IMURecorder {
 		let user_accleration_x : Double
 		let user_accleration_y : Double
 		let user_accleration_z : Double
+		let rotation_rate_x    : Double
+		let rotation_rate_y    : Double
+		let rotation_rate_z    : Double
 		let attitude_x         : Double
 		let attitude_y         : Double
 		let attitude_z         : Double
