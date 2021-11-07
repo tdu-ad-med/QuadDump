@@ -1,4 +1,7 @@
 # QuadDump
+
+<img src="docs/logo.svg" width="128">  
+
 ![demo](docs/demo.gif)  
 
 これはiPhone 12 Pro上で動作する録画アプリです。
