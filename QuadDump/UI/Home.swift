@@ -145,7 +145,6 @@ struct ButtonsView: View {
     @Binding var errorAlert: Bool
     @Binding var result: SimpleResult
     @State private var isRecording: Bool = false
-    @State private var firstAnim: Bool = true
 
     // バネマスダンパー系で臨界減衰となるようなアニメーションの作成
     //   臨界減衰となる条件: damping = sqrt(stiffness) * 2
@@ -175,7 +174,6 @@ struct ButtonsView: View {
                         }
                     }
                 )
-                .padding(.bottom, firstAnim ? -80 : 16)
             }
 
             // 録画一覧に飛ぶボタンの表示
@@ -188,7 +186,6 @@ struct ButtonsView: View {
                         .padding(.leading, 20)
                     Spacer()
                 }
-                .padding(.bottom, firstAnim ? -80 : 27)
             }
         }
         .onAppear {
@@ -200,8 +197,6 @@ struct ButtonsView: View {
                 isRecording = false
                 return
             }
-
-            firstAnim = false
         }
         .onDisappear {
             result = quadRecorder.disable()
@@ -212,9 +207,6 @@ struct ButtonsView: View {
                 isRecording = false
                 return
             }
-
-            firstAnim = true
         }
-        .animation(buttonAnimation, value: firstAnim)
     }
 }
